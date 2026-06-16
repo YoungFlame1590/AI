@@ -65,6 +65,18 @@
           <button id="a4ReviseFromA5" type="button" disabled>按 A5 退回指令修订 SRS</button>
         </section>
 
+        <section class="panel">
+          <div class="panel-title">A6 需求基线</div>
+          <p id="a6Status" class="status">正在读取基线状态...</p>
+          <label for="ccbConclusion">CCB 审批结论</label>
+          <input id="ccbConclusion" type="text" value="通过（无保留意见）" />
+          <label class="checkbox-row">
+            <input id="acceptA5Risks" type="checkbox" />
+            <span>我确认接受当前 A5 风险并提交 CCB</span>
+          </label>
+          <button id="a6CreateBaseline" class="primary" type="button" disabled>创建需求基线</button>
+        </section>
+
         <section class="panel records-panel">
           <div class="panel-title">本页保存记录</div>
           <ul id="records"></ul>

@@ -6,6 +6,7 @@ DEFAULT_MODEL = "qwen3.6-flash"
 A3_MODEL = "qwen3.6-plus"
 A4_MODEL = "qwen3.6-plus"
 A5_MODEL = "qwen3.7-plus"
+A6_MODEL = "qwen3.7-plus"
 
 
 def get_model_name() -> str:

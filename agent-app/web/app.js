@@ -10,6 +10,7 @@ const state = {
   a3Status: null,
   a4Status: null,
   a5Status: null,
+  a6Status: null,
   savedRecords: [],
   busy: false,
   batchRunning: false,
@@ -38,6 +39,10 @@ const els = {
   a5Status: document.querySelector("#a5Status"),
   a5Validate: document.querySelector("#a5Validate"),
   a4ReviseFromA5: document.querySelector("#a4ReviseFromA5"),
+  a6Status: document.querySelector("#a6Status"),
+  ccbConclusion: document.querySelector("#ccbConclusion"),
+  acceptA5Risks: document.querySelector("#acceptA5Risks"),
+  a6CreateBaseline: document.querySelector("#a6CreateBaseline"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -70,6 +75,9 @@ function setBusy(isBusy) {
   els.a4Generate.disabled = locked || !hasKey();
   els.a5Validate.disabled = locked || !hasKey();
   els.a4ReviseFromA5.disabled = locked || !hasKey() || !state.a5Status?.canReviseA4;
+  const needsRiskAcceptance = !!state.a6Status?.requiresA5RiskAcceptance;
+  els.acceptA5Risks.disabled = locked || !needsRiskAcceptance;
+  els.a6CreateBaseline.disabled = locked || !hasKey() || !state.a6Status?.canCreateBaseline || (needsRiskAcceptance && !els.acceptA5Risks.checked);
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -154,7 +162,7 @@ async function api(path, body) {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const data = await response.json();
-  els.modelInfo.textContent = `A1/A2：${data.model} · A3/A4：${data.a3Model} · A5：${data.a5Model} · 百炼兼容接口：${data.baseUrl}`;
+  els.modelInfo.textContent = `A1/A2：${data.model} · A3/A4：${data.a3Model} · A5：${data.a5Model} · A6：${data.a6Model} · 百炼兼容接口：${data.baseUrl}`;
 }
 
 async function loadStakeholders() {
@@ -224,6 +232,22 @@ async function loadA5Status() {
   setBusy(state.busy);
 }
 
+async function loadA6Status() {
+  const response = await fetch("/api/a6/status");
+  const data = await response.json();
+  state.a6Status = data;
+  const srsText = data.latestSrs ? `SRS：${data.latestSrs}` : "缺少 SRS";
+  const a5Text = data.latestA5Report ? `A5：${data.latestA5Report}` : "缺少 A5";
+  const baselineCount = (data.baselines || []).length;
+  const riskText = data.requiresA5RiskAcceptance ? " · A5 未通过，但可由 CCB 带风险批准基线" : "";
+  els.a6Status.textContent = `${srsText} · ${a5Text} · ${data.a5Message}${riskText} · 下一基线：${data.nextBaselineId} · 已有 ${baselineCount} 个 · 模型：${data.a6Model}`;
+  els.a6Status.className = data.canCreateBaseline ? "status ready" : "status error";
+  if (!data.requiresA5RiskAcceptance) {
+    els.acceptA5Risks.checked = false;
+  }
+  setBusy(state.busy);
+}
+
 function showA2Output(title, content) {
   els.a2Output.hidden = false;
   els.a2OutputText.textContent = `# ${title}\n\n${content}`;
@@ -243,6 +267,8 @@ els.toggleKey.addEventListener("click", () => {
 });
 
 els.stakeholderSelect.addEventListener("change", updateStakeholderInfo);
+
+els.acceptA5Risks.addEventListener("change", () => setBusy(state.busy));
 
 els.chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -468,6 +494,7 @@ els.a4Generate.addEventListener("click", async () => {
     showA2Output("A4 SRS 初稿", `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n${data.content}`);
     appendSystemMessage(`A4 SRS 已保存：${data.relativePath}`);
     await loadA4Status();
+    await loadA6Status();
   } catch (error) {
     els.a4Status.textContent = `A4 生成失败：${error.message}`;
     els.a4Status.className = "status error";
@@ -490,6 +517,7 @@ els.a5Validate.addEventListener("click", async () => {
     showA2Output("A5 需求验证报告", `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n${data.content}`);
     appendSystemMessage(`A5 需求验证报告已保存：${data.relativePath}`);
     await loadA5Status();
+    await loadA6Status();
   } catch (error) {
     els.a5Status.textContent = `A5 验证失败：${error.message}`;
     els.a5Status.className = "status error";
@@ -508,18 +536,48 @@ els.a4ReviseFromA5.addEventListener("click", async () => {
     const data = await api("/api/a4/revise-from-a5", {
       apiKey: state.apiKey,
     });
-    els.a5Status.textContent = `A4 返修稿已保存：${data.relativePath}`;
+    const warningText = (data.warnings || []).length ? `，含 ${data.warnings.length} 条待 A5 判断的提示` : "";
+    els.a5Status.textContent = `A4 返修稿已保存：${data.relativePath}${warningText}`;
     showA2Output(
       "A4 SRS 返修稿",
-      `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n## 返修来源\n- SRS：${data.sourceSrs}\n- A5：${data.sourceA5Report}\n\n${data.content}`
+      `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n## 校验提示\n${(data.warnings || []).map((item) => `- ${item}`).join("\n") || "- 无"}\n\n## 返修来源\n- SRS：${data.sourceSrs}\n- A5：${data.sourceA5Report}\n\n${data.content}`
     );
     appendSystemMessage(`A4 已按 A5 退回指令生成返修稿：${data.relativePath}`);
     await loadA4Status();
     await loadA5Status();
+    await loadA6Status();
   } catch (error) {
     els.a5Status.textContent = `A4 返修失败，未生成新 SRS 文件：${error.message}`;
     els.a5Status.className = "status error";
     appendSystemMessage(`A4 返修失败，未写入知识库：${error.message}`);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.a6CreateBaseline.addEventListener("click", async () => {
+  if (!hasKey() || !state.a6Status?.canCreateBaseline) return;
+  setBusy(true);
+  els.a6Status.textContent = "A6 正在创建需求基线...";
+  els.a6Status.className = "status ready";
+  try {
+    const data = await api("/api/a6/create-baseline", {
+      apiKey: state.apiKey,
+      ccbConclusion: els.ccbConclusion.value.trim() || "通过（无保留意见）",
+      acceptA5Risks: els.acceptA5Risks.checked,
+    });
+    const fileList = (data.files || []).map((item) => `- ${item}`).join("\n");
+    els.a6Status.textContent = `A6 基线已创建：${data.relativePath}`;
+    showA2Output(
+      "A6 需求基线",
+      `${data.summary}\n\n## 基线目录\n${data.relativePath}\n\n## 生成文件\n${fileList}`
+    );
+    appendSystemMessage(`A6 需求基线已创建：${data.relativePath}`);
+    await loadA6Status();
+  } catch (error) {
+    els.a6Status.textContent = `A6 创建基线失败：${error.message}`;
+    els.a6Status.className = "status error";
+    appendSystemMessage(error.message);
   } finally {
     setBusy(false);
   }
@@ -557,7 +615,7 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status()]).then(() => {
+Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status(), loadA6Status()]).then(() => {
   renderSavedRecords();
   renderChat();
   updateKeyState();

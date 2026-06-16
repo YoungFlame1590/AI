@@ -20,7 +20,7 @@ def _relative(path: Path) -> str:
 
 
 def _version_key(path: Path) -> tuple[int, int]:
-    match = re.search(r"-v(\d+)\.(\d+)\.md$", path.name)
+    match = re.search(r"-v(\d+)\.(\d+)(?=\.[^.]+$)", path.name)
     if not match:
         return (0, 0)
     return (int(match.group(1)), int(match.group(2)))
@@ -92,19 +92,53 @@ def create_a3_agent(llm):
 
 def _extract_json(text: str) -> dict:
     cleaned = text.strip()
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.S)
-    if fenced:
-        cleaned = fenced.group(1)
-    else:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            cleaned = cleaned[start : end + 1]
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned, flags=re.S | re.I)
+    candidates = [fenced.group(1).strip()] if fenced else []
+    candidates.append(cleaned)
 
+    decoder = json.JSONDecoder()
+    errors: list[str] = []
+    for candidate in candidates:
+        direct = candidate.strip()
+        if not direct:
+            continue
+        try:
+            payload = json.loads(direct)
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError as exc:
+            errors.append(str(exc))
+
+        for match in re.finditer(r"\{", direct):
+            try:
+                payload, _ = decoder.raw_decode(direct[match.start() :])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                return payload
+
+    detail = f" 解析细节：{errors[0]}" if errors else ""
+    raise ValueError(f"A3 输出不是可解析的 JSON，请重试建模。{detail}")
+
+
+def _run_json_task(agent, description: str, expected_output: str) -> dict:
+    output = run_task(agent, description, expected_output)
     try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise ValueError("A3 输出不是可解析的 JSON，请重试建模。") from exc
+        return _extract_json(output)
+    except ValueError:
+        retry_description = f"""{description}
+
+## 输出格式纠偏
+
+上一次输出不是合法 JSON。请重新输出，严格遵守：
+- 只输出一个 JSON 对象。
+- 不要输出 Markdown 代码围栏。
+- 不要在 JSON 前后添加解释文字。
+- 字符串内换行必须使用 JSON 合法转义或直接作为 JSON 字符串内容。
+- JSON 顶层必须包含 summary、useCaseDiagram、activityDiagrams、decisionMarkdown 四个字段。
+"""
+        retry_output = run_task(agent, retry_description, expected_output)
+        return _extract_json(retry_output)
 
 
 def _require_puml(value: str, label: str) -> str:
@@ -188,12 +222,11 @@ def run_a3_modeling(llm) -> dict:
   "decisionMarkdown": "完整 Markdown 说明"
 }}
 """
-    output = run_task(
+    payload = _run_json_task(
         agent,
         description,
         "只输出可解析 JSON，包含用例图、活动图数组、建模决策说明。",
     )
-    payload = _extract_json(output)
 
     use_case = _require_puml(str(payload.get("useCaseDiagram", "")), "用例图")
     activities = payload.get("activityDiagrams", [])

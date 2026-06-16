@@ -3,7 +3,7 @@
 本仓库按职责拆分为两个主目录：
 
 ```text
-agent-app/          A1a/A1b/A2 CrewAI 需求获取与质量分析 Web 应用
+agent-app/          A1a/A1b/A2/A3/A4/A5/A6 CrewAI 需求工程 Web 应用
 obsidian-vault/     Obsidian 知识库与课程设计资产
 ```
 
@@ -35,12 +35,21 @@ obsidian-vault/     Obsidian 知识库与课程设计资产
 3. 点击 `生成回退追问`，A2 会生成面向涉众的自然语言澄清问题。
 4. 点击 `执行回退访谈`，系统调用对应 A1a 补充获取需求，并保存到 `obsidian-vault/raw/notes/`。
 
+## A3-A6 阶段产物
+
+页面侧边栏继续提供后续需求工程智能体：
+
+- `A3 UML 建模`：生成 PlantUML 用例图、活动图和建模决策说明。
+- `A4 SRS 文档生成`：生成或按 A5 退回指令返修 `SRS-初稿-vX.Y.md`。
+- `A5 需求验证`：生成 `需求验证报告-vX.Y.md`，作为 CCB 评审建议与风险清单。
+- `A6 需求基线`：在 A5 已验证当前 SRS 后创建 `wiki/baselines/BL-YYYYMMDD-NN/`；若 A5 未通过，需要勾选风险确认后由 CCB 带风险批准。
+
 ## 目录说明
 
 ### agent-app
 
 - `app.py`：FastAPI 后端。
-- `agents/`：A1a 涉众智能体、A1b 需求获取智能体、A2 质量分析智能体、百炼 LLM 配置、记录写入逻辑。
+- `agents/`：A1a/A1b/A2/A3/A4/A5/A6 智能体、百炼 LLM 配置、记录写入逻辑。
 - `web/`：本地页面 HTML/CSS/JS。
 - `requirements.txt`：Python 依赖。
 - `.env.example`：可选模型与接口配置示例，不存放真实 key。
@@ -69,7 +78,9 @@ node compile.js
 
 ## 默认模型
 
-- 模型：`qwen3.6-flash`
+- A1/A2：`qwen3.6-flash`
+- A3/A4：`qwen3.6-plus`
+- A5/A6：`qwen3.7-plus`
 - 默认接口：`https://dashscope.aliyuncs.com/compatible-mode/v1`
 
 如需覆盖：

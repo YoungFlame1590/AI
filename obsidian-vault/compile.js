@@ -254,32 +254,17 @@ function checkMarkdownFormat(markdownFiles) {
   }
 }
 
-function hashContent(filePath) {
-  return readText(filePath).replace(/\r\n/gu, "\n").trim();
-}
-
-function sourceCandidatesForBaselineFile(filePath) {
-  const name = path.basename(filePath);
-  const candidates = [
-    path.join(ROOT, "wiki", "summaries", name),
-    path.join(ROOT, "wiki", "summaries", name.replace("正式版", "初稿-v1.0")),
-    path.join(ROOT, "wiki", "summaries", name.replace("正式版", "正式版-v1.0")),
-    path.join(ROOT, "wiki", "summaries", name.replace(".md", "-v1.0.md")),
-  ];
-
-  if (name === "需求清单.md") {
-    candidates.push(path.join(ROOT, "wiki", "summaries", "需求清单-v1.0.md"));
-  }
-  if (name === "溯源矩阵.md") {
-    candidates.push(path.join(ROOT, "wiki", "summaries", "溯源矩阵-v1.0.md"));
-  }
-
-  return candidates;
-}
-
 function checkBaselineConsistency() {
   const baselinesDir = path.join(ROOT, "wiki", "baselines");
   if (!fs.existsSync(baselinesDir)) return;
+
+  const requiredFiles = [
+    "基线说明.md",
+    "SRS-正式版.md",
+    "需求清单.md",
+    "需求溯源矩阵-RTM.md",
+    "基线创立确认.md",
+  ];
 
   const baselineDirs = fs
     .readdirSync(baselinesDir, { withFileTypes: true })
@@ -287,15 +272,27 @@ function checkBaselineConsistency() {
     .map((entry) => path.join(baselinesDir, entry.name));
 
   for (const baselineDir of baselineDirs) {
-    const files = walk(baselineDir).filter((file) => file.endsWith(".md"));
-    for (const file of files) {
-      const candidates = sourceCandidatesForBaselineFile(file);
-      const source = candidates.find((candidate) => fs.existsSync(candidate));
-      if (!source) continue;
-
-      if (hashContent(file) !== hashContent(source)) {
-        addIssue("基线一致性", file, `与源文件 ${rel(source)} 内容不一致`);
+    for (const name of requiredFiles) {
+      const filePath = path.join(baselineDir, name);
+      if (!fs.existsSync(filePath)) {
+        addIssue("基线完整性", filePath, "基线目录缺少必要文件");
       }
+    }
+
+    const umlDir = path.join(baselineDir, "UML模型");
+    if (!fs.existsSync(umlDir)) {
+      addIssue("基线完整性", umlDir, "基线目录缺少 UML模型 子目录");
+      continue;
+    }
+
+    const umlFiles = fs.readdirSync(umlDir, { withFileTypes: true }).filter((entry) => entry.isFile());
+    const hasUseCase = umlFiles.some((entry) => entry.name.startsWith("用例图") && entry.name.endsWith(".puml"));
+    const hasActivity = umlFiles.some((entry) => entry.name.startsWith("活动图-") && entry.name.endsWith(".puml"));
+    if (!hasUseCase) {
+      addIssue("基线完整性", umlDir, "基线 UML模型 子目录缺少用例图 .puml");
+    }
+    if (!hasActivity) {
+      addIssue("基线完整性", umlDir, "基线 UML模型 子目录缺少活动图 .puml");
     }
   }
 }

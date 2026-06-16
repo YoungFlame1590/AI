@@ -138,6 +138,22 @@ label,
   width: 100%;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin-top: 3px;
+}
+
 .records-panel {
   min-height: 140px;
 }

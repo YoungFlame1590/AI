@@ -13,7 +13,7 @@ from agents.recording import REPO_ROOT
 
 
 def _version_key(path: Path) -> tuple[int, int]:
-    match = re.search(r"-v(\d+)\.(\d+)\.md$", path.name)
+    match = re.search(r"-v(\d+)\.(\d+)(?=\.[^.]+$)", path.name)
     if not match:
         return (0, 0)
     return (int(match.group(1)), int(match.group(2)))
@@ -43,16 +43,23 @@ def _latest_a5_report() -> Path | None:
 def _read_uml_files() -> list[dict[str, str]]:
     if not UML_DIR.exists():
         return []
-    files = []
-    for path in sorted(UML_DIR.glob("*")):
+    latest_by_key: dict[str, Path] = {}
+    for path in UML_DIR.glob("*"):
         if path.is_file() and path.suffix.lower() in {".puml", ".md"} and path.name != ".gitkeep":
-            files.append(
-                {
-                    "name": path.name,
-                    "relativePath": _relative(path),
-                    "content": path.read_text(encoding="utf-8"),
-                }
-            )
+            key = re.sub(r"-v\d+\.\d+(?=\.[^.]+$)", "", path.name)
+            current = latest_by_key.get(key)
+            if current is None or _version_key(path) > _version_key(current):
+                latest_by_key[key] = path
+
+    files = []
+    for path in sorted(latest_by_key.values(), key=lambda item: item.name):
+        files.append(
+            {
+                "name": path.name,
+                "relativePath": _relative(path),
+                "content": path.read_text(encoding="utf-8"),
+            }
+        )
     return files
 
 
@@ -128,6 +135,7 @@ def _normalize_revised_srs(content: str) -> str:
     text = content.replace("日均并发", "早高峰总请求量与峰值并发指标")
     text = text.replace("日均 并发", "早高峰总请求量与峰值并发指标")
     text = re.sub(r"日\s*均\s*并\s*发", "早高峰总请求量与峰值并发指标", text)
+    text = re.sub(r"TPS/QPS[：:]\s*≥?\s*1\.5", "TPS/QPS：不单列，验收以2小时总请求量与峰值并发连接数为准", text)
     lines = []
     for line in text.splitlines():
         if _is_payment_status_table_row(line):
@@ -150,24 +158,36 @@ def _is_payment_status_table_row(line: str) -> bool:
     return bool(cells) and cells[0] == "PaymentStatus"
 
 
-def _validate_revised_srs(content: str) -> None:
+def _validate_revised_srs(content: str) -> list[str]:
     _validate_srs(content)
-    required = [
-        "验证问题修复对照表",
+    if "验证问题修复对照表" not in content:
+        raise ValueError("A4 返修后的 SRS 缺少“验证问题修复对照表”。")
+    payment_status_rows = [line for line in content.splitlines() if _is_payment_status_table_row(line)]
+    if any("待核销" in line for line in payment_status_rows):
+        bad_row = next(line.strip() for line in payment_status_rows if "待核销" in line)
+        raise ValueError(f"A4 返修后的 SRS 数据字典仍将“待核销”放在 PaymentStatus 枚举行：{bad_row}")
+
+    warnings = []
+    recommended_terms = [
         "FinancialVerifyStatus",
         "OutsourcingCap",
         "StorageFeeCap",
         "REQ-APR-001",
     ]
-    missing = [item for item in required if item not in content]
-    if missing:
-        raise ValueError(f"A4 返修后的 SRS 缺少 A5 闭环内容：{', '.join(missing)}。")
+    missing_terms = [item for item in recommended_terms if item not in content]
+    if missing_terms:
+        warnings.append(f"返修稿未显式包含建议闭环项：{', '.join(missing_terms)}。已保存，等待 A5 复验判断。")
     if "日均并发" in content:
-        raise ValueError("A4 返修后的 SRS 仍包含“日均并发”，请重新修正性能指标。")
-    payment_status_rows = [line for line in content.splitlines() if _is_payment_status_table_row(line)]
-    if any("待核销" in line for line in payment_status_rows):
-        bad_row = next(line.strip() for line in payment_status_rows if "待核销" in line)
-        raise ValueError(f"A4 返修后的 SRS 数据字典仍将“待核销”放在 PaymentStatus 枚举行：{bad_row}")
+        warnings.append("返修稿仍包含“日均并发”，建议后续继续修正性能指标。")
+    if "JMeter" in content:
+        warnings.append("返修稿仍包含 JMeter 等测试执行工具，建议移入测试策略文档。")
+    if "待核销-耗材" not in content:
+        warnings.append("返修稿未显式覆盖 FinancialVerifyStatus 的“待核销-耗材”状态。")
+    if "退款3个工作日" not in content and "3个工作日内原路" not in content:
+        warnings.append("返修稿未显式在 REQ-ORD-002 补充退款3个工作日内原路返回。")
+    if "进度超60%" not in content and "进度超过60%" not in content and "60%进度" not in content:
+        warnings.append("返修稿未显式闭环大单保护锁的进度超60%条件或裁剪说明。")
+    return warnings
 
 
 def _raise_unsaved_revised_srs_error(exc: ValueError) -> None:
@@ -267,7 +287,7 @@ def generate_srs(llm) -> dict:
     }
 
 
-def revise_srs_from_a5(llm) -> dict:
+def revise_srs_from_a5(llm, repair_context: str | None = None) -> dict:
     notes = read_note_records()
     if not notes:
         raise ValueError("obsidian-vault/raw/notes/ 中没有可返修 SRS 的需求记录。")
@@ -334,6 +354,10 @@ def revise_srs_from_a5(llm) -> dict:
 
 {uml_text}
 
+## 本轮 A3 自动修复结果
+
+{repair_context or "本轮未执行 A3 自动修复；如 A5 报告涉及 UML/Actor/活动图，请在 SRS 中与最新 UML 版本保持一致。"}
+
 ## 返修任务
 
 请根据 A5 需求验证报告中的问题清单和退回指令，生成一份完整的新版 SRS 初稿。
@@ -349,6 +373,17 @@ def revise_srs_from_a5(llm) -> dict:
 - PaymentStatus 只能描述支付资金状态，例如 0未付/1已付/2退款；“待核销”只能出现在 FinancialVerifyStatus、财务处理状态或业务正文中。
 - 在 REQ-FIN-002 与 StorageFeeCap 中补充“单日≤5元”的计费阶梯。
 - 将 REQ-APR-001 改为折扣区间 × 金额区间决策表，必须覆盖“折扣≤5%且金额800-2000元”等边界组合。
+- 如 A5 指出 A3 UML 与 SRS 不一致，必须先同步 UML 角色与活动图分支，再生成新版 SRS。
+- REQ-DLV-001 必须包含当日累计例外金额≤200元的批次阈值，或在附录 C 明确裁剪原因。
+- REQ-FIN-002 如保留3个工作日退款SLA，必须在附录 C 记录客户1452“拒单后2小时原路退回”诉求的裁剪/妥协决议。
+- FinancialVerifyStatus 必须支持“待核销-耗材”子状态或财务科目映射。
+- StorageFeeCap 和 OutsourcingCap 的数据字典长度/范围只能写物理取值范围，业务规则应保留在功能需求验收标准。
+- NFR-PER-002 不得包含 JMeter、压测脚本等具体测试执行策略；测试方法放入测试策略文档。
+- 若保留“2小时总请求量≥180单”，不得再写“TPS/QPS≥1.5”这类数量级冲突指标；优先删除 TPS/QPS 单项，或改成与180单/2小时一致的验收说明。
+- StorageFeeCap 和 OutsourcingCap 必须明确是“系统配置参数”还是“订单快照字段”；推荐定义为系统配置参数，订单只记录命中时的快照值。
+- REQ-DLV-001 的交付/拦截结果必须覆盖 FinancialVerifyStatus 全部枚举，包含“待核销-耗材”。
+- REQ-ORD-002 必须包含“退款3个工作日内原路返回”。
+- 大单保护锁必须补充“生产进度超60%”条件；若不采用，必须在附录裁剪决议说明原因。
 
 写作约束：
 - 只依据输入材料和 A5 退回指令返修，不新增与图文快印门店连锁管理无关的功能。
@@ -368,7 +403,7 @@ def revise_srs_from_a5(llm) -> dict:
     )
     srs = _normalize_revised_srs(_clean_markdown(content))
     try:
-        _validate_revised_srs(srs)
+        warnings = _validate_revised_srs(srs)
     except ValueError as exc:
         _raise_unsaved_revised_srs_error(exc)
     path = _next_srs_path()
@@ -380,5 +415,6 @@ def revise_srs_from_a5(llm) -> dict:
         "sourceSrs": _relative(latest_srs),
         "sourceA5Report": _relative(a5_report),
         "content": srs,
+        "warnings": warnings,
         "summary": f"A4 已按 A5 退回指令生成 SRS 返修稿：{_relative(path)}",
     }

@@ -14,6 +14,7 @@ from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summar
 from agents.a3_modeler import A3_MODEL, a3_status, run_a3_modeling
 from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs, revise_srs_from_a5
 from agents.a5_requirement_validator import A5_MODEL, a5_status, validate_requirements
+from agents.a6_baseline_manager import A6_MODEL, a6_status, create_baseline
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import list_records, save_record
 
@@ -53,6 +54,12 @@ class A2AnalyzeRequest(BaseModel):
     apiKey: str = ""
 
 
+class A6BaselineRequest(BaseModel):
+    apiKey: str = ""
+    ccbConclusion: str = "通过（无保留意见）"
+    acceptA5Risks: bool = False
+
+
 class A2RollbackPlanRequest(BaseModel):
     apiKey: str = ""
     report: str = Field(min_length=1)
@@ -87,6 +94,7 @@ def config() -> dict[str, str]:
         "a3Model": A3_MODEL,
         "a4Model": A4_MODEL,
         "a5Model": A5_MODEL,
+        "a6Model": A6_MODEL,
         "baseUrl": get_base_url(),
     }
 
@@ -225,5 +233,19 @@ def a5_validate(payload: A2AnalyzeRequest) -> dict[str, Any]:
     try:
         llm = create_llm(payload.apiKey, model_override=A5_MODEL)
         return validate_requirements(llm)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.get("/api/a6/status")
+def a6_baseline_status() -> dict[str, Any]:
+    return a6_status()
+
+
+@app.post("/api/a6/create-baseline")
+def a6_create_baseline(payload: A6BaselineRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey, model_override=A6_MODEL)
+        return create_baseline(llm, payload.ccbConclusion, payload.acceptA5Risks)
     except Exception as exc:
         raise _http_error(exc) from exc
