@@ -108,9 +108,21 @@ def _extract_json(text: str) -> dict:
 
 
 def _require_puml(value: str, label: str) -> str:
-    text = value.strip()
+    text = re.sub(r"^```(?:plantuml|puml)?\s*", "", value.strip(), flags=re.I)
+    text = re.sub(r"\s*```$", "", text).strip()
     if "@startuml" not in text or "@enduml" not in text:
         raise ValueError(f"A3 生成的{label}缺少 @startuml 或 @enduml。")
+    return text
+
+
+def _normalize_activity_puml(value: str, label: str) -> str:
+    text = _require_puml(value, label)
+    text = re.sub(r"^(\s*if)\s+(\[[^\]\r\n]+\])\s+then\b", r"\1 (\2) then", text, flags=re.M)
+    text = re.sub(r"^(\s*elseif)\s+(\[[^\]\r\n]+\])\s+then\b", r"\1 (\2) then", text, flags=re.M)
+    if re.search(r"^\s*(?:if|elseif)\s+\[[^\]\r\n]+\]\s+then\b", text, flags=re.M):
+        raise ValueError(f"A3 生成的{label}仍包含不兼容的 if [条件] then 语法。")
+    if not re.search(r"^\s*(?:stop|end)\s*$", text, flags=re.M):
+        raise ValueError(f"A3 生成的{label}缺少明确终止节点 stop 或 end。")
     return text
 
 
@@ -157,9 +169,14 @@ def run_a3_modeling(llm) -> dict:
 - 所有 PlantUML 必须能独立渲染，包含 @startuml 和 @enduml。
 - 活动图必须使用泳道，必须包含开始/结束节点。
 - 每个分支必须使用方括号 Guard Condition。
+- 活动图条件必须写成 if ([Guard Condition]) then (是)。
+- 活动图 elseif 必须写成 elseif ([Guard Condition]) then (是)。
+- 禁止输出 if [Guard Condition] then (是) 或 elseif [Guard Condition] then (是)。
+- 每张活动图至少包含一个明确终止节点 stop 或 end。
 - 不输出图片描述，不生成 SRS。
 - 只依据输入材料，不能编造与图文快印业务无关的功能。
 - 建模决策说明不要使用 Obsidian 双向链接；如使用 Markdown 表格，所有行列数必须一致。
+- PlantUML 字符串内部不要包含 Markdown 代码围栏。
 
 输出必须是一个 JSON 对象，不要输出 JSON 以外的解释文字：
 {{
@@ -193,7 +210,7 @@ def run_a3_modeling(llm) -> dict:
         if not isinstance(item, dict):
             continue
         name = str(item.get("name", "")).strip() or "核心用例"
-        plantuml = _require_puml(str(item.get("plantuml", "")), f"活动图-{name}")
+        plantuml = _normalize_activity_puml(str(item.get("plantuml", "")), f"活动图-{name}")
         path = _next_versioned_path(UML_DIR, f"活动图-{_sanitize_filename(name)}", ".puml")
         path.write_text(plantuml + "\n", encoding="utf-8")
         saved_files.append(_relative(path))
