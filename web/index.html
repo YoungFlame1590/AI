@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A1 需求获取智能体</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <h1>A1 需求获取</h1>
+          <p class="muted">图文快印门店连锁管理系统</p>
+        </div>
+
+        <section class="panel">
+          <label for="apiKey">阿里云百炼 API key</label>
+          <div class="key-row">
+            <input id="apiKey" type="password" placeholder="sk- 或 dashscope key" autocomplete="off" />
+            <button id="toggleKey" type="button" title="显示或隐藏 key">显示</button>
+          </div>
+          <p id="keyStatus" class="status">输入 key 后启用智能体</p>
+        </section>
+
+        <section class="panel">
+          <label for="stakeholderSelect">涉众角色</label>
+          <select id="stakeholderSelect"></select>
+          <p id="stakeholderGoal" class="muted"></p>
+        </section>
+
+        <section class="panel">
+          <button id="a1bRun" class="primary" type="button" disabled>A1b 半自动追问</button>
+          <button id="saveRecord" type="button" disabled>保存到 Obsidian</button>
+          <button id="clearChat" type="button">清空当前会话</button>
+        </section>
+
+        <section class="panel records-panel">
+          <div class="panel-title">已保存记录</div>
+          <ul id="records"></ul>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <div id="modelInfo" class="model-info">模型加载中...</div>
+            <div class="muted">真人可直接向 A1a 提问，也可让 A1b 自动追问一轮。</div>
+          </div>
+        </header>
+
+        <section id="chatLog" class="chat-log"></section>
+
+        <form id="chatForm" class="composer">
+          <textarea id="messageInput" rows="3" placeholder="向当前 A1a 涉众智能体提问..." disabled></textarea>
+          <button id="sendMessage" class="primary" type="submit" disabled>发送给 A1a</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+

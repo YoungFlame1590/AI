@@ -16,7 +16,7 @@ const REQUIRED_DIRS = [
 const RAW_NOTE_RE = /^[^-\\\/]+-\d{8}-\d{4}-需求记录\.md$/u;
 const SUMMARY_FILE_RE = /^[^\\\/]+-v\d+(?:\.\d+)*\.md$/u;
 const BASELINE_DIR_RE = /^BL-\d{8}-\d{2}$/u;
-const IGNORED_DIRS = new Set([".git", "node_modules"]);
+const IGNORED_DIRS = new Set([".git", "node_modules", ".venv", "__pycache__", ".pytest_cache"]);
 
 const issues = [];
 

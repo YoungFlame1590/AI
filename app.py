@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from agents.a1a_stakeholders import create_a1a_agent, list_stakeholders
+from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summarize_requirements
+from agents.llm_config import create_llm, get_base_url, get_model_name
+from agents.recording import list_records, save_record
+
+
+ROOT = Path(__file__).resolve().parent
+WEB_DIR = ROOT / "web"
+
+app = FastAPI(title="A1a/A1b 需求获取系统", version="1.0.0")
+app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+
+class ConversationItem(BaseModel):
+    speaker: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+
+
+class A1aChatRequest(BaseModel):
+    apiKey: str = ""
+    stakeholderId: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    history: list[ConversationItem] = []
+
+
+class A1bRequest(BaseModel):
+    apiKey: str = ""
+    stakeholderId: str = Field(min_length=1)
+    history: list[ConversationItem] = []
+
+
+class SaveRecordRequest(BaseModel):
+    stakeholderId: str = Field(min_length=1)
+    history: list[ConversationItem] = []
+    summary: str | None = None
+
+
+def _history_dicts(history: list[ConversationItem]) -> list[dict[str, str]]:
+    return [item.model_dump() for item in history]
+
+
+def _http_error(exc: Exception) -> HTTPException:
+    message = str(exc)
+    if "Authentication" in message or "api_key" in message.lower():
+        message = "百炼 API key 校验失败，请检查页面输入的 key。"
+    return HTTPException(status_code=400, detail=message)
+
+
+@app.get("/")
+def index():
+    return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/api/config")
+def config() -> dict[str, str]:
+    return {
+        "model": get_model_name(),
+        "baseUrl": get_base_url(),
+    }
+
+
+@app.get("/api/stakeholders")
+def stakeholders() -> list[dict[str, str]]:
+    return list_stakeholders()
+
+
+@app.post("/api/chat/a1a")
+def chat_a1a(payload: A1aChatRequest) -> dict[str, str]:
+    try:
+        llm = create_llm(payload.apiKey)
+        agent = create_a1a_agent(payload.stakeholderId, llm)
+        answer = ask_a1a(agent, payload.stakeholderId, payload.message, _history_dicts(payload.history))
+        return {"answer": answer}
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/chat/a1b/next")
+def chat_a1b_next(payload: A1bRequest) -> dict[str, str]:
+    try:
+        llm = create_llm(payload.apiKey)
+        agent = create_a1b_agent(llm)
+        question = next_question(agent, payload.stakeholderId, _history_dicts(payload.history))
+        return {"question": question}
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/chat/a1b/run")
+def chat_a1b_run(payload: A1bRequest) -> dict[str, str]:
+    try:
+        history = _history_dicts(payload.history)
+        llm = create_llm(payload.apiKey)
+        a1b_agent = create_a1b_agent(llm)
+        question = next_question(a1b_agent, payload.stakeholderId, history)
+        history_with_question = history + [{"speaker": "A1b需求获取智能体", "content": question}]
+        a1a_agent = create_a1a_agent(payload.stakeholderId, llm)
+        answer = ask_a1a(a1a_agent, payload.stakeholderId, question, history_with_question)
+        return {"question": question, "answer": answer}
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/records/save")
+def save(payload: SaveRecordRequest) -> dict[str, str]:
+    try:
+        return save_record(payload.stakeholderId, _history_dicts(payload.history), payload.summary)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/records")
+def records() -> list[dict[str, Any]]:
+    return list_records()

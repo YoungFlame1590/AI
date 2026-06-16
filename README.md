@@ -41,3 +41,50 @@ compile.js               知识库结构与内容检查脚本
 node compile.js
 ```
 
+## A1a/A1b 需求获取页面
+
+本知识库包含一个本地 Web 应用，用于通过 CrewAI 和阿里云百炼完成需求获取：
+
+- A1a：七类涉众智能体，模拟门店店员、门店店长、总部运营管理员、财务人员、客户、配送/外协人员、系统管理员。
+- A1b：需求获取智能体，可半自动向 A1a 追问，并帮助收集原始需求。
+- 默认模型：`qwen3.6-flash`。
+- 默认接口：`https://dashscope.aliyuncs.com/compatible-mode/v1`。
+
+### 一键启动
+
+双击：
+
+```text
+启动需求获取页面.bat
+```
+
+脚本会自动创建 `.venv`、安装依赖、启动本地服务，并打开：
+
+```text
+http://127.0.0.1:8000
+```
+
+### API key 使用方式
+
+在网页顶部输入阿里云百炼 API key 后，才能使用 A1a/A1b 智能体。key 只在当前浏览器页面和本次请求中使用，不写入 `.env`、Markdown 或仓库。
+
+如需覆盖默认模型或接口，可设置环境变量：
+
+```powershell
+$env:BAILIAN_MODEL="qwen3.6-flash"
+$env:BAILIAN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+```
+
+### 保存记录
+
+点击“保存到 Obsidian”后，会生成：
+
+```text
+raw/notes/{涉众角色}-{YYYYMMDD-HHMM}-需求记录.md
+```
+
+保存后建议运行：
+
+```bash
+node compile.js
+```
