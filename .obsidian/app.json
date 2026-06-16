@@ -1,0 +1,10 @@
+{
+  "alwaysUpdateLinks": true,
+  "attachmentFolderPath": "archive/attachments",
+  "newFileLocation": "current",
+  "promptDelete": false,
+  "readableLineLength": true,
+  "showLineNumber": false,
+  "strictLineBreaks": false,
+  "useMarkdownLinks": false
+}
