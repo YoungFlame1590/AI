@@ -31,8 +31,10 @@
 
         <section class="panel">
           <button id="a1bRun" class="primary" type="button" disabled>A1b 半自动追问</button>
-          <button id="saveRecord" type="button" disabled>保存到 Obsidian</button>
+          <button id="a1bRunAll" type="button" disabled>A1b 访谈全部涉众三轮</button>
+          <button id="saveRecord" type="button" disabled>保存当前手动会话</button>
           <button id="clearChat" type="button">清空当前会话</button>
+          <p id="batchStatus" class="status">批量访谈未开始</p>
         </section>
 
         <section class="panel records-panel">
@@ -45,7 +47,7 @@
         <header class="topbar">
           <div>
             <div id="modelInfo" class="model-info">模型加载中...</div>
-            <div class="muted">真人可直接向 A1a 提问，也可让 A1b 自动追问一轮。</div>
+            <div class="muted">真人提问和 A1b 追问都会按轮自动保存。</div>
           </div>
         </header>
 
@@ -61,4 +63,3 @@
     <script src="/static/app.js"></script>
   </body>
 </html>
-

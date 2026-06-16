@@ -7,8 +7,10 @@ import re
 from agents.a1a_stakeholders import PROJECT_NAME, get_stakeholder
 
 
-ROOT = Path(__file__).resolve().parents[1]
-RAW_NOTES_DIR = ROOT / "raw" / "notes"
+APP_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = APP_ROOT.parent
+VAULT_ROOT = REPO_ROOT / "obsidian-vault"
+RAW_NOTES_DIR = VAULT_ROOT / "raw" / "notes"
 
 
 def _escape_table_cell(value: str) -> str:
@@ -166,7 +168,7 @@ def save_record(stakeholder_id: str, history: list[dict], summary: str | None = 
 
     content = build_markdown(stakeholder_id, history, summary, recorded_at=record_time)
     path.write_text(content, encoding="utf-8")
-    return {"path": str(path), "relativePath": str(path.relative_to(ROOT)).replace("\\", "/")}
+    return {"path": str(path), "relativePath": str(path.relative_to(REPO_ROOT)).replace("\\", "/")}
 
 
 def list_records() -> list[dict[str, str]]:
@@ -175,7 +177,7 @@ def list_records() -> list[dict[str, str]]:
     for path in sorted(RAW_NOTES_DIR.glob("*.md"), key=lambda item: item.stat().st_mtime, reverse=True):
         records.append({
             "name": path.name,
-            "relativePath": str(path.relative_to(ROOT)).replace("\\", "/"),
+            "relativePath": str(path.relative_to(REPO_ROOT)).replace("\\", "/"),
             "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
         })
     return records

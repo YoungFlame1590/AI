@@ -3,6 +3,9 @@ const state = {
   stakeholders: [],
   history: [],
   rounds: [],
+  manualRounds: [],
+  busy: false,
+  batchRunning: false,
 };
 
 const els = {
@@ -12,8 +15,10 @@ const els = {
   stakeholderSelect: document.querySelector("#stakeholderSelect"),
   stakeholderGoal: document.querySelector("#stakeholderGoal"),
   a1bRun: document.querySelector("#a1bRun"),
+  a1bRunAll: document.querySelector("#a1bRunAll"),
   saveRecord: document.querySelector("#saveRecord"),
   clearChat: document.querySelector("#clearChat"),
+  batchStatus: document.querySelector("#batchStatus"),
   records: document.querySelector("#records"),
   modelInfo: document.querySelector("#modelInfo"),
   chatLog: document.querySelector("#chatLog"),
@@ -31,10 +36,15 @@ function hasKey() {
 }
 
 function setBusy(isBusy) {
-  els.sendMessage.disabled = isBusy || !hasKey();
-  els.messageInput.disabled = isBusy || !hasKey();
-  els.a1bRun.disabled = isBusy || !hasKey();
-  els.saveRecord.disabled = isBusy || state.history.length === 0;
+  state.busy = isBusy;
+  const locked = isBusy || state.batchRunning;
+  els.sendMessage.disabled = locked || !hasKey();
+  els.messageInput.disabled = locked || !hasKey();
+  els.a1bRun.disabled = locked || !hasKey();
+  els.a1bRunAll.disabled = locked || !hasKey();
+  els.stakeholderSelect.disabled = locked;
+  els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
+  els.clearChat.disabled = locked;
 }
 
 function updateKeyState() {
@@ -57,6 +67,16 @@ function appendMessage(speaker, content, kind = "", source = "manual") {
 
 function appendSystemMessage(content) {
   appendMessage("系统提示", content, "agent", "system");
+}
+
+async function saveRound(stakeholderId, roundHistory, label) {
+  const saved = await api("/api/records/save", {
+    stakeholderId,
+    history: roundHistory,
+    summary: "",
+  });
+  await loadRecords();
+  return `${label}已保存：${saved.relativePath}`;
 }
 
 function renderChat() {
@@ -154,7 +174,8 @@ els.chatForm.addEventListener("submit", async (event) => {
   if (!message || !hasKey()) return;
 
   const stakeholder = selectedStakeholder();
-    appendMessage("真人访谈者", message, "human", "manual");
+  const questionItem = { speaker: "真人访谈者", content: message };
+  appendMessage(questionItem.speaker, questionItem.content, "human", "manual");
   els.messageInput.value = "";
   setBusy(true);
 
@@ -165,44 +186,15 @@ els.chatForm.addEventListener("submit", async (event) => {
       message,
       history: state.history,
     });
-    appendMessage(`A1a-${stakeholder.name}`, data.answer, "agent", "manual");
-  } catch (error) {
-    appendMessage("系统提示", error.message, "agent");
-  } finally {
-    setBusy(false);
-  }
-});
-
-els.a1bRun.addEventListener("click", async () => {
-  if (!hasKey()) return;
-  const stakeholder = selectedStakeholder();
-  setBusy(true);
-  try {
-    const data = await api("/api/chat/a1b/run", {
-      apiKey: state.apiKey,
+    const answerItem = { speaker: `A1a-${stakeholder.name}`, content: data.answer };
+    appendMessage(answerItem.speaker, answerItem.content, "agent", "manual");
+    const savedMessage = await saveRound(stakeholder.id, [questionItem, answerItem], "真人本轮");
+    state.manualRounds.push({
       stakeholderId: stakeholder.id,
-      history: state.history,
+      history: [questionItem, answerItem],
+      savedPath: savedMessage.split("：").pop(),
     });
-    const roundHistory = [
-      { speaker: "A1b需求获取智能体", content: data.question },
-      { speaker: `A1a-${stakeholder.name}`, content: data.answer },
-    ];
-    state.rounds.push({
-      stakeholderId: stakeholder.id,
-      history: roundHistory,
-      savedPath: "",
-    });
-    appendMessage(roundHistory[0].speaker, roundHistory[0].content, "a1b", "a1b");
-    appendMessage(roundHistory[1].speaker, roundHistory[1].content, "agent", "a1b");
-
-    const saved = await api("/api/records/save", {
-      stakeholderId: stakeholder.id,
-      history: roundHistory,
-      summary: "",
-    });
-    state.rounds[state.rounds.length - 1].savedPath = saved.relativePath;
-    appendSystemMessage(`本轮已保存：${saved.relativePath}`);
-    await loadRecords();
+    appendSystemMessage(savedMessage);
   } catch (error) {
     appendSystemMessage(error.message);
   } finally {
@@ -210,22 +202,97 @@ els.a1bRun.addEventListener("click", async () => {
   }
 });
 
+async function runA1bRound(stakeholder, contextHistory, displayInChat = true, label = "本轮") {
+  const data = await api("/api/chat/a1b/run", {
+    apiKey: state.apiKey,
+    stakeholderId: stakeholder.id,
+    history: contextHistory,
+  });
+  const roundHistory = [
+    { speaker: "A1b需求获取智能体", content: data.question },
+    { speaker: `A1a-${stakeholder.name}`, content: data.answer },
+  ];
+  state.rounds.push({
+    stakeholderId: stakeholder.id,
+    history: roundHistory,
+    savedPath: "",
+  });
+  if (displayInChat) {
+    appendMessage(roundHistory[0].speaker, roundHistory[0].content, "a1b", "a1b");
+    appendMessage(roundHistory[1].speaker, roundHistory[1].content, "agent", "a1b");
+  }
+  const savedMessage = await saveRound(stakeholder.id, roundHistory, label);
+  state.rounds[state.rounds.length - 1].savedPath = savedMessage.split("：").pop();
+  return { roundHistory, savedMessage };
+}
+
+els.a1bRun.addEventListener("click", async () => {
+  if (!hasKey()) return;
+  const stakeholder = selectedStakeholder();
+  setBusy(true);
+  try {
+    const result = await runA1bRound(stakeholder, state.history, true, "A1b本轮");
+    appendSystemMessage(result.savedMessage);
+  } catch (error) {
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.a1bRunAll.addEventListener("click", async () => {
+  if (!hasKey() || state.batchRunning) return;
+  state.batchRunning = true;
+  setBusy(true);
+  els.batchStatus.textContent = "批量访谈启动中...";
+  els.batchStatus.className = "status ready";
+  try {
+    let savedCount = 0;
+    const total = state.stakeholders.length * 3;
+    for (const stakeholder of state.stakeholders) {
+      const stakeholderContext = [];
+      appendSystemMessage(`开始批量访谈：${stakeholder.name}`);
+      for (let round = 1; round <= 3; round += 1) {
+        els.batchStatus.textContent = `${stakeholder.name} ${round}/3 进行中... (${savedCount}/${total})`;
+        const result = await runA1bRound(
+          stakeholder,
+          stakeholderContext,
+          false,
+          `${stakeholder.name} ${round}/3 `
+        );
+        stakeholderContext.push(...result.roundHistory);
+        savedCount += 1;
+        els.batchStatus.textContent = `${stakeholder.name} ${round}/3 已保存 (${savedCount}/${total})`;
+        appendSystemMessage(result.savedMessage);
+      }
+    }
+    els.batchStatus.textContent = `批量访谈完成：已保存 ${savedCount} / ${total} 轮`;
+    els.batchStatus.className = "status ready";
+  } catch (error) {
+    els.batchStatus.textContent = `批量访谈中断：${error.message}`;
+    els.batchStatus.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    state.batchRunning = false;
+    setBusy(false);
+  }
+});
+
 els.saveRecord.addEventListener("click", async () => {
   const stakeholder = selectedStakeholder();
-  const manualHistory = state.history
-    .filter((item) => item.source === "manual")
-    .map(({ speaker, content }) => ({ speaker, content }));
-  if (manualHistory.length === 0) {
-    appendSystemMessage("没有可保存的真人手动访谈内容；A1b 自动轮次已在生成时单独保存。");
+  const unsavedRound = state.manualRounds.find((round) => !round.savedPath);
+  if (!unsavedRound) {
+    appendSystemMessage("没有待兜底保存的真人手动访谈轮次；正常问答已按轮自动保存。");
     return;
   }
   setBusy(true);
   try {
     const data = await api("/api/records/save", {
-      stakeholderId: stakeholder.id,
-      history: manualHistory,
+      stakeholderId: unsavedRound.stakeholderId || stakeholder.id,
+      history: unsavedRound.history,
       summary: "",
     });
+    unsavedRound.savedPath = data.relativePath;
     appendSystemMessage(`已保存手动访谈：${data.relativePath}`);
     await loadRecords();
   } catch (error) {
@@ -238,6 +305,7 @@ els.saveRecord.addEventListener("click", async () => {
 els.clearChat.addEventListener("click", () => {
   state.history = [];
   state.rounds = [];
+  state.manualRounds = [];
   renderChat();
   setBusy(false);
 });

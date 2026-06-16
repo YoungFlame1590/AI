@@ -1,8 +1,12 @@
 .env
 .venv/
+**/.env
+**/.venv/
 __pycache__/
+**/__pycache__/
 *.py[cod]
 .pytest_cache/
+**/.pytest_cache/
 *.log
 raw/notes/*.tmp
-
+obsidian-vault/raw/notes/*.tmp

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "templates/变更请求CR模板.md",
+                "file": "高级软件设计实践_LLM提示词指南.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "变更请求CR模板"
+              "title": "高级软件设计实践_LLM提示词指南"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "templates/变更请求CR模板.md",
+                "file": "raw/notes/门店店员-20260616-0958-需求记录.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "变更请求CR模板 的反向链接列表"
+              "title": "门店店员-20260616-0958-需求记录 的反向链接列表"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "templates/变更请求CR模板.md",
+                "file": "raw/notes/门店店员-20260616-0958-需求记录.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "变更请求CR模板 的出链列表"
+              "title": "门店店员-20260616-0958-需求记录 的出链列表"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "templates/变更请求CR模板.md",
+                "file": "raw/notes/门店店员-20260616-0958-需求记录.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "变更请求CR模板 的大纲"
+              "title": "门店店员-20260616-0958-需求记录 的大纲"
             }
           }
         ]
@@ -185,18 +185,41 @@
   },
   "active": "40bf6454020908bf",
   "lastOpenFiles": [
-    "templates/UML模型说明模板.md",
-    "templates/SRS文档模板.md",
-    "templates/RTM溯源矩阵模板.md",
-    "templates/RCR逆向校验报告模板.md",
-    "templates/CIA变更影响分析模板.md",
-    "templates/ADR模板.md",
-    "templates/变更请求CR模板.md",
-    "templates/需求问题清单模板.md",
-    "templates/需求基线说明模板.md",
-    "templates/涉众需求记录模板.md",
-    "00-首页.md",
-    "高级软件设计实践_LLM提示词指南.md",
-    "README.md"
+    "raw/notes/财务人员-20260616-1004-需求记录.md",
+    "raw/notes/财务人员-20260616-1003-需求记录.md",
+    "raw/notes/财务人员-20260616-1002-需求记录.md",
+    "raw/notes/门店店员-20260616-0958-需求记录.md",
+    "raw/notes/门店店员-20260616-0956-需求记录.md",
+    "raw/notes/门店店员-20260616-0955-需求记录.md",
+    "raw/notes/门店店员-20260616-0957-需求记录.md",
+    "raw/notes/系统管理员-20260616-1008-需求记录.md",
+    "raw/notes/系统管理员-20260616-1009-需求记录.md",
+    "raw/notes/系统管理员-20260616-1010-需求记录.md",
+    "raw/notes/总部运营管理员-20260616-1000-需求记录.md",
+    "raw/notes/总部运营管理员-20260616-1002-需求记录.md",
+    "raw/notes/总部运营管理员-20260616-1001-需求记录.md",
+    "raw/notes/门店店员-20260616-0941-需求记录.md",
+    "raw/notes/配送外协人员-20260616-1008-需求记录.md",
+    "raw/notes/配送外协人员-20260616-1007-需求记录.md",
+    "raw/notes/配送外协人员-20260616-1006-需求记录.md",
+    "raw/notes/客户-20260616-1006-需求记录.md",
+    "raw/notes/客户-20260616-1005-需求记录.md",
+    "raw/notes/客户-20260616-1004-需求记录.md",
+    "raw/notes/门店店长-20260616-1000-需求记录.md",
+    "raw/notes/门店店长-20260616-0959-需求记录.md",
+    "raw/notes/门店店长-20260616-0958-需求记录.md",
+    "raw/notes/总部运营管理员-20260616-0953-需求记录.md",
+    "raw/notes/总部运营管理员-20260616-0952-需求记录.md",
+    "raw/notes/门店店长-20260616-0954-需求记录.md",
+    "__pycache__/app.cpython-312.pyc",
+    "__pycache__",
+    "agents/__pycache__/recording.cpython-312.pyc",
+    "agents/__pycache__/llm_config.cpython-312.pyc",
+    "agents/__pycache__/a1b_elicitor.cpython-312.pyc",
+    "agents/__pycache__/__init__.cpython-312.pyc",
+    "agents/__pycache__/a1a_stakeholders.cpython-312.pyc",
+    "agents/__pycache__",
+    "启动需求获取页面.bat",
+    "web/styles.css"
   ]
 }
