@@ -12,6 +12,7 @@ from agents.a1a_stakeholders import create_a1a_agent, list_stakeholders
 from agents.a2_quality_analyzer import analyze_notes, generate_rollback_plan, notes_summary, run_rollback
 from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summarize_requirements
 from agents.a3_modeler import A3_MODEL, a3_status, run_a3_modeling
+from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import list_records, save_record
 
@@ -83,6 +84,7 @@ def config() -> dict[str, str]:
     return {
         "model": get_model_name(),
         "a3Model": A3_MODEL,
+        "a4Model": A4_MODEL,
         "baseUrl": get_base_url(),
     }
 
@@ -184,5 +186,19 @@ def a3_model(payload: A2AnalyzeRequest) -> dict[str, Any]:
     try:
         llm = create_llm(payload.apiKey, model_override=A3_MODEL)
         return run_a3_modeling(llm)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.get("/api/a4/status")
+def a4_srs_status() -> dict[str, Any]:
+    return a4_status()
+
+
+@app.post("/api/a4/generate")
+def a4_generate(payload: A2AnalyzeRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey, model_override=A4_MODEL)
+        return generate_srs(llm)
     except Exception as exc:
         raise _http_error(exc) from exc

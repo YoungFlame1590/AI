@@ -8,6 +8,7 @@ const state = {
   a2ReportPath: "",
   a2RollbackPlan: "",
   a3Status: null,
+  a4Status: null,
   savedRecords: [],
   busy: false,
   batchRunning: false,
@@ -31,6 +32,8 @@ const els = {
   a2Status: document.querySelector("#a2Status"),
   a3Status: document.querySelector("#a3Status"),
   a3Model: document.querySelector("#a3Model"),
+  a4Status: document.querySelector("#a4Status"),
+  a4Generate: document.querySelector("#a4Generate"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -60,6 +63,7 @@ function setBusy(isBusy) {
   els.a2Plan.disabled = locked || !hasKey() || !state.a2Report;
   els.a2Rollback.disabled = locked || !hasKey() || !state.a2RollbackPlan;
   els.a3Model.disabled = locked || !hasKey();
+  els.a4Generate.disabled = locked || !hasKey();
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -144,7 +148,7 @@ async function api(path, body) {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const data = await response.json();
-  els.modelInfo.textContent = `A1/A2：${data.model} · A3：${data.a3Model} · 百炼兼容接口：${data.baseUrl}`;
+  els.modelInfo.textContent = `A1/A2：${data.model} · A3：${data.a3Model} · A4：${data.a4Model} · 百炼兼容接口：${data.baseUrl}`;
 }
 
 async function loadStakeholders() {
@@ -191,6 +195,15 @@ async function loadA3Status() {
   state.a3Status = data;
   const reportText = data.latestA2Report ? `最新 A2：${data.latestA2Report}` : "未检测到 A2 报告";
   els.a3Status.textContent = `可建模记录 ${data.notesCount} 篇 · ${reportText} · 模型：${data.a3Model}`;
+}
+
+async function loadA4Status() {
+  const response = await fetch("/api/a4/status");
+  const data = await response.json();
+  state.a4Status = data;
+  const reportText = data.latestA2Report ? `A2：${data.latestA2Report}` : "缺少 A2";
+  const srsText = data.latestSrs ? `最新 SRS：${data.latestSrs}` : "尚未生成 SRS";
+  els.a4Status.textContent = `notes ${data.notesCount} 篇 · UML ${data.umlCount} 个 · ${reportText} · ${srsText} · 模型：${data.a4Model}`;
 }
 
 function showA2Output(title, content) {
@@ -424,6 +437,28 @@ els.a3Model.addEventListener("click", async () => {
   }
 });
 
+els.a4Generate.addEventListener("click", async () => {
+  if (!hasKey()) return;
+  setBusy(true);
+  els.a4Status.textContent = "A4 正在生成 SRS 初稿...";
+  els.a4Status.className = "status ready";
+  try {
+    const data = await api("/api/a4/generate", {
+      apiKey: state.apiKey,
+    });
+    els.a4Status.textContent = `A4 SRS 已保存：${data.relativePath}`;
+    showA2Output("A4 SRS 初稿", `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n${data.content}`);
+    appendSystemMessage(`A4 SRS 已保存：${data.relativePath}`);
+    await loadA4Status();
+  } catch (error) {
+    els.a4Status.textContent = `A4 生成失败：${error.message}`;
+    els.a4Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
 els.saveRecord.addEventListener("click", async () => {
   const stakeholder = selectedStakeholder();
   const unsavedRound = state.manualRounds.find((round) => !round.savedPath);
@@ -456,7 +491,7 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status()]).then(() => {
+Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status()]).then(() => {
   renderSavedRecords();
   renderChat();
   updateKeyState();

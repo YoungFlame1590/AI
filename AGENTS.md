@@ -4,14 +4,15 @@
 
 This repository has two main work areas:
 
-- `agent-app/`: FastAPI + CrewAI web app for A1a/A1b requirements elicitation.
+- `agent-app/`: FastAPI + CrewAI web app for A1a/A1b elicitation, A2 quality analysis, A3 UML modeling, and A4 SRS drafting.
   - `app.py`: API entrypoint and static web serving.
-  - `agents/`: stakeholder agents, elicitation logic, LLM config, and Obsidian record writing.
+  - `agents/`: stakeholder agents, elicitation, quality analysis, UML modeling, SRS drafting, LLM config, and Obsidian record writing.
   - `web/`: plain HTML/CSS/JS frontend.
   - `requirements.txt`: Python dependencies.
 - `obsidian-vault/`: Obsidian knowledge base.
   - `raw/notes/`: elicitation records named `{涉众角色}-{YYYYMMDD-HHMM}-需求记录.md`.
-  - `wiki/`: summaries, baselines, design artifacts.
+  - `wiki/summaries/`: A2 reports, UML `.puml` files, SRS drafts, and other design artifacts.
+  - `wiki/baselines/`: approved baseline snapshots.
   - `templates/`: reusable Markdown templates.
   - `compile.js`: vault integrity checker.
 
@@ -38,6 +39,12 @@ Validate Python syntax:
 python -m compileall agent-app\agents agent-app\app.py
 ```
 
+Validate frontend JavaScript:
+
+```powershell
+node --check agent-app\web\app.js
+```
+
 Start manually if needed:
 
 ```powershell
@@ -47,7 +54,16 @@ cd agent-app
 
 ## Coding Style & Naming Conventions
 
-Use 4-space indentation for Python and 2-space indentation for frontend files. Keep Python modules focused by responsibility. Use clear snake_case names in Python and camelCase in JavaScript. Do not hard-code API keys. Markdown records must follow the existing Chinese filename pattern so `compile.js` passes.
+Use 4-space indentation for Python and 2-space indentation for frontend files. Keep Python modules focused by responsibility. Use clear snake_case names in Python and camelCase in JavaScript. Do not hard-code API keys. Markdown records must follow the Chinese filename pattern so `compile.js` passes.
+
+A3 PlantUML activity diagrams must use plugin-compatible conditions:
+
+```plantuml
+if ([Guard Condition]) then (是)
+elseif ([Guard Condition]) then (是)
+```
+
+Do not generate `if [Guard Condition] then`. Keep `.puml` files free of Markdown fences.
 
 ## Testing Guidelines
 
@@ -55,20 +71,22 @@ There is no formal test suite yet. Before committing, run:
 
 ```powershell
 python -m compileall agent-app\agents agent-app\app.py
+node --check agent-app\web\app.js
 cd obsidian-vault; node compile.js
 ```
 
-For behavior changes, verify the local page at `http://127.0.0.1:8000` and confirm new records are written under `obsidian-vault/raw/notes/`.
+For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`.
 
 ## Commit & Pull Request Guidelines
 
 Existing commits use concise imperative messages, for example `Add CrewAI requirements elicitation app` and `Organize vault and agent app directories`. Follow that style. PRs should describe the user-facing change, list verification commands, and mention any generated records or screenshots when UI behavior changes.
 
+Generated notes, A2 reports, A3 UML files, A4 SRS drafts, and Obsidian plugin/workspace state are project artifacts. Commit them only when the task explicitly asks for those outputs; otherwise keep commits scoped to source changes.
+
 ## Security & Configuration Tips
 
-API keys are entered in the webpage and must not be committed. Keep `.env`, `.venv/`, `__pycache__/`, and other local artifacts ignored. Before pushing, search for leaked secrets:
+API keys are entered in the webpage and must not be committed. A1/A2 default to `qwen3.6-flash`; A3/A4 use `qwen3.6-plus`. Keep `.env`, `.venv/`, `__pycache__/`, and local Obsidian plugin state out of source commits unless intentionally requested. Before pushing, search for leaked secrets:
 
 ```powershell
 rg -n "ghp_|DASHSCOPE_API_KEY|test-key" -g "!*.git/**" -g "!**/.venv/**"
 ```
-

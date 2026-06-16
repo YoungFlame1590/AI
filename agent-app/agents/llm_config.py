@@ -4,6 +4,7 @@ import os
 DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_MODEL = "qwen3.6-flash"
 A3_MODEL = "qwen3.6-plus"
+A4_MODEL = "qwen3.6-plus"
 
 
 def get_model_name() -> str:
