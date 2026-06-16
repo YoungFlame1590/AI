@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>A1 需求获取智能体</title>
+    <title>需求工程智能体</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <aside class="sidebar">
         <div>
-          <h1>A1 需求获取</h1>
+          <h1>需求工程智能体</h1>
           <p class="muted">图文快印门店连锁管理系统</p>
         </div>
 
@@ -46,6 +46,12 @@
           <p id="a2Status" class="status">尚未运行 A2</p>
         </section>
 
+        <section class="panel">
+          <div class="panel-title">A3 UML 建模</div>
+          <p id="a3Status" class="status">正在读取建模状态...</p>
+          <button id="a3Model" class="primary" type="button" disabled>运行 A3 建模</button>
+        </section>
+
         <section class="panel records-panel">
           <div class="panel-title">本页保存记录</div>
           <ul id="records"></ul>
@@ -63,7 +69,7 @@
         <section id="chatLog" class="chat-log"></section>
 
         <section id="a2Output" class="a2-output" hidden>
-          <h2>A2 输出</h2>
+          <h2>智能体输出</h2>
           <pre id="a2OutputText"></pre>
         </section>
 

@@ -7,6 +7,7 @@ const state = {
   a2Report: "",
   a2ReportPath: "",
   a2RollbackPlan: "",
+  a3Status: null,
   savedRecords: [],
   busy: false,
   batchRunning: false,
@@ -28,6 +29,8 @@ const els = {
   a2Plan: document.querySelector("#a2Plan"),
   a2Rollback: document.querySelector("#a2Rollback"),
   a2Status: document.querySelector("#a2Status"),
+  a3Status: document.querySelector("#a3Status"),
+  a3Model: document.querySelector("#a3Model"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -56,6 +59,7 @@ function setBusy(isBusy) {
   els.a2Analyze.disabled = locked || !hasKey();
   els.a2Plan.disabled = locked || !hasKey() || !state.a2Report;
   els.a2Rollback.disabled = locked || !hasKey() || !state.a2RollbackPlan;
+  els.a3Model.disabled = locked || !hasKey();
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -140,7 +144,7 @@ async function api(path, body) {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const data = await response.json();
-  els.modelInfo.textContent = `模型：${data.model} · 百炼兼容接口：${data.baseUrl}`;
+  els.modelInfo.textContent = `A1/A2：${data.model} · A3：${data.a3Model} · 百炼兼容接口：${data.baseUrl}`;
 }
 
 async function loadStakeholders() {
@@ -179,6 +183,14 @@ async function loadA2NotesStatus() {
     .map(([name, count]) => `${name}${count}篇`)
     .join("，");
   els.a2NotesStatus.textContent = `已读取 ${data.count} 篇需求记录${stakeholderText ? `：${stakeholderText}` : ""}`;
+}
+
+async function loadA3Status() {
+  const response = await fetch("/api/a3/status");
+  const data = await response.json();
+  state.a3Status = data;
+  const reportText = data.latestA2Report ? `最新 A2：${data.latestA2Report}` : "未检测到 A2 报告";
+  els.a3Status.textContent = `可建模记录 ${data.notesCount} 篇 · ${reportText} · 模型：${data.a3Model}`;
 }
 
 function showA2Output(title, content) {
@@ -384,6 +396,34 @@ els.a2Rollback.addEventListener("click", async () => {
   }
 });
 
+els.a3Model.addEventListener("click", async () => {
+  if (!hasKey()) return;
+  setBusy(true);
+  els.a3Status.textContent = "A3 正在生成 UML 模型...";
+  els.a3Status.className = "status ready";
+  try {
+    const data = await api("/api/a3/model", {
+      apiKey: state.apiKey,
+    });
+    const files = data.files || [];
+    const fileList = files.map((item) => `- ${item}`).join("\n");
+    const activityList = (data.activityDiagrams || []).map((item) => `- ${item}`).join("\n");
+    els.a3Status.textContent = `A3 建模完成：已生成 ${files.length} 个文件`;
+    showA2Output(
+      "A3 UML 建模结果",
+      `${data.summary}\n\n## 生成文件\n${fileList}\n\n## 活动图\n${activityList || "- 未返回活动图名称"}\n\n## 建模决策说明\n${data.decisionMarkdown}`
+    );
+    appendSystemMessage(`A3 建模完成：已生成 ${files.length} 个文件。`);
+    await loadA3Status();
+  } catch (error) {
+    els.a3Status.textContent = `A3 建模失败：${error.message}`;
+    els.a3Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
 els.saveRecord.addEventListener("click", async () => {
   const stakeholder = selectedStakeholder();
   const unsavedRound = state.manualRounds.find((round) => !round.savedPath);
@@ -416,7 +456,7 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus()]).then(() => {
+Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status()]).then(() => {
   renderSavedRecords();
   renderChat();
   updateKeyState();

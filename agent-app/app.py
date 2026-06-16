@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from agents.a1a_stakeholders import create_a1a_agent, list_stakeholders
 from agents.a2_quality_analyzer import analyze_notes, generate_rollback_plan, notes_summary, run_rollback
 from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summarize_requirements
+from agents.a3_modeler import A3_MODEL, a3_status, run_a3_modeling
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import list_records, save_record
 
@@ -81,6 +82,7 @@ def index():
 def config() -> dict[str, str]:
     return {
         "model": get_model_name(),
+        "a3Model": A3_MODEL,
         "baseUrl": get_base_url(),
     }
 
@@ -168,5 +170,19 @@ def a2_rollback_run(payload: A2RollbackRunRequest) -> dict[str, Any]:
     try:
         llm = create_llm(payload.apiKey)
         return run_rollback(llm, payload.plan, payload.stakeholderIds)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.get("/api/a3/status")
+def a3_modeling_status() -> dict[str, Any]:
+    return a3_status()
+
+
+@app.post("/api/a3/model")
+def a3_model(payload: A2AnalyzeRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey, model_override=A3_MODEL)
+        return run_a3_modeling(llm)
     except Exception as exc:
         raise _http_error(exc) from exc
