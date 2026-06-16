@@ -167,6 +167,27 @@ label,
   padding: 22px;
 }
 
+.a2-output {
+  border-top: 1px solid var(--line);
+  background: #fff;
+  padding: 18px 22px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.a2-output h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.a2-output pre {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-family: Consolas, "Microsoft YaHei", monospace;
+  font-size: 13px;
+}
+
 .empty {
   max-width: 620px;
   margin: 10vh auto 0;
@@ -233,4 +254,3 @@ label,
     grid-template-columns: 1fr;
   }
 }
-

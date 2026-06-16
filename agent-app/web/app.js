@@ -4,6 +4,9 @@ const state = {
   history: [],
   rounds: [],
   manualRounds: [],
+  a2Report: "",
+  a2ReportPath: "",
+  a2RollbackPlan: "",
   busy: false,
   batchRunning: false,
 };
@@ -19,6 +22,13 @@ const els = {
   saveRecord: document.querySelector("#saveRecord"),
   clearChat: document.querySelector("#clearChat"),
   batchStatus: document.querySelector("#batchStatus"),
+  a2NotesStatus: document.querySelector("#a2NotesStatus"),
+  a2Analyze: document.querySelector("#a2Analyze"),
+  a2Plan: document.querySelector("#a2Plan"),
+  a2Rollback: document.querySelector("#a2Rollback"),
+  a2Status: document.querySelector("#a2Status"),
+  a2Output: document.querySelector("#a2Output"),
+  a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
   modelInfo: document.querySelector("#modelInfo"),
   chatLog: document.querySelector("#chatLog"),
@@ -42,6 +52,9 @@ function setBusy(isBusy) {
   els.messageInput.disabled = locked || !hasKey();
   els.a1bRun.disabled = locked || !hasKey();
   els.a1bRunAll.disabled = locked || !hasKey();
+  els.a2Analyze.disabled = locked || !hasKey();
+  els.a2Plan.disabled = locked || !hasKey() || !state.a2Report;
+  els.a2Rollback.disabled = locked || !hasKey() || !state.a2RollbackPlan;
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -151,6 +164,20 @@ async function loadRecords() {
     item.textContent = `${record.name} (${record.modified})`;
     els.records.appendChild(item);
   }
+}
+
+async function loadA2NotesStatus() {
+  const response = await fetch("/api/a2/notes");
+  const data = await response.json();
+  const stakeholderText = Object.entries(data.stakeholders || {})
+    .map(([name, count]) => `${name}${count}篇`)
+    .join("，");
+  els.a2NotesStatus.textContent = `已读取 ${data.count} 篇需求记录${stakeholderText ? `：${stakeholderText}` : ""}`;
+}
+
+function showA2Output(title, content) {
+  els.a2Output.hidden = false;
+  els.a2OutputText.textContent = `# ${title}\n\n${content}`;
 }
 
 function updateStakeholderInfo() {
@@ -278,6 +305,77 @@ els.a1bRunAll.addEventListener("click", async () => {
   }
 });
 
+els.a2Analyze.addEventListener("click", async () => {
+  if (!hasKey()) return;
+  setBusy(true);
+  els.a2Status.textContent = "A2 正在分析全部需求记录...";
+  els.a2Status.className = "status ready";
+  try {
+    const data = await api("/api/a2/analyze", {
+      apiKey: state.apiKey,
+    });
+    state.a2Report = data.content;
+    state.a2ReportPath = data.relativePath;
+    state.a2RollbackPlan = "";
+    els.a2Status.textContent = `A2 报告已保存：${data.relativePath}`;
+    showA2Output("A2 需求质量分析报告", data.content);
+    appendSystemMessage(`A2 报告已保存：${data.relativePath}`);
+  } catch (error) {
+    els.a2Status.textContent = `A2 分析失败：${error.message}`;
+    els.a2Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.a2Plan.addEventListener("click", async () => {
+  if (!hasKey() || !state.a2Report) return;
+  setBusy(true);
+  els.a2Status.textContent = "正在生成回退追问话术...";
+  els.a2Status.className = "status ready";
+  try {
+    const data = await api("/api/a2/rollback-plan", {
+      apiKey: state.apiKey,
+      report: state.a2Report,
+    });
+    state.a2RollbackPlan = data.content;
+    els.a2Status.textContent = "回退追问话术已生成，可执行回退访谈";
+    showA2Output("A2 回退追问话术", data.content);
+    appendSystemMessage("A2 回退追问话术已生成。");
+  } catch (error) {
+    els.a2Status.textContent = `生成回退追问失败：${error.message}`;
+    els.a2Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.a2Rollback.addEventListener("click", async () => {
+  if (!hasKey() || !state.a2RollbackPlan) return;
+  setBusy(true);
+  els.a2Status.textContent = "正在执行 A2 回退访谈...";
+  els.a2Status.className = "status ready";
+  try {
+    const data = await api("/api/a2/rollback-run", {
+      apiKey: state.apiKey,
+      plan: state.a2RollbackPlan,
+      stakeholderIds: null,
+    });
+    els.a2Status.textContent = `A2 回退访谈完成：已保存 ${data.count} 条补充记录`;
+    appendSystemMessage(`A2 回退访谈完成：已保存 ${data.count} 条补充记录。`);
+    await loadRecords();
+    await loadA2NotesStatus();
+  } catch (error) {
+    els.a2Status.textContent = `A2 回退访谈失败：${error.message}`;
+    els.a2Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
 els.saveRecord.addEventListener("click", async () => {
   const stakeholder = selectedStakeholder();
   const unsavedRound = state.manualRounds.find((round) => !round.savedPath);
@@ -310,7 +408,7 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadRecords()]).then(() => {
+Promise.all([loadConfig(), loadStakeholders(), loadRecords(), loadA2NotesStatus()]).then(() => {
   renderChat();
   updateKeyState();
 });

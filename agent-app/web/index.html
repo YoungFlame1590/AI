@@ -37,6 +37,15 @@
           <p id="batchStatus" class="status">批量访谈未开始</p>
         </section>
 
+        <section class="panel">
+          <div class="panel-title">A2 需求质量分析</div>
+          <p id="a2NotesStatus" class="status">正在读取需求记录...</p>
+          <button id="a2Analyze" class="primary" type="button" disabled>运行 A2 质量分析</button>
+          <button id="a2Plan" type="button" disabled>生成回退追问</button>
+          <button id="a2Rollback" type="button" disabled>执行回退访谈</button>
+          <p id="a2Status" class="status">尚未运行 A2</p>
+        </section>
+
         <section class="panel records-panel">
           <div class="panel-title">已保存记录</div>
           <ul id="records"></ul>
@@ -52,6 +61,11 @@
         </header>
 
         <section id="chatLog" class="chat-log"></section>
+
+        <section id="a2Output" class="a2-output" hidden>
+          <h2>A2 输出</h2>
+          <pre id="a2OutputText"></pre>
+        </section>
 
         <form id="chatForm" class="composer">
           <textarea id="messageInput" rows="3" placeholder="向当前 A1a 涉众智能体提问..." disabled></textarea>

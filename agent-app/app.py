@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agents.a1a_stakeholders import create_a1a_agent, list_stakeholders
+from agents.a2_quality_analyzer import analyze_notes, generate_rollback_plan, notes_summary, run_rollback
 from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summarize_requirements
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import list_records, save_record
@@ -43,6 +44,21 @@ class SaveRecordRequest(BaseModel):
     stakeholderId: str = Field(min_length=1)
     history: list[ConversationItem] = []
     summary: str | None = None
+
+
+class A2AnalyzeRequest(BaseModel):
+    apiKey: str = ""
+
+
+class A2RollbackPlanRequest(BaseModel):
+    apiKey: str = ""
+    report: str = Field(min_length=1)
+
+
+class A2RollbackRunRequest(BaseModel):
+    apiKey: str = ""
+    plan: str = Field(min_length=1)
+    stakeholderIds: list[str] | None = None
 
 
 def _history_dicts(history: list[ConversationItem]) -> list[dict[str, str]]:
@@ -122,3 +138,35 @@ def save(payload: SaveRecordRequest) -> dict[str, str]:
 @app.get("/api/records")
 def records() -> list[dict[str, Any]]:
     return list_records()
+
+
+@app.get("/api/a2/notes")
+def a2_notes() -> dict[str, Any]:
+    return notes_summary()
+
+
+@app.post("/api/a2/analyze")
+def a2_analyze(payload: A2AnalyzeRequest) -> dict[str, str]:
+    try:
+        llm = create_llm(payload.apiKey)
+        return analyze_notes(llm)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/a2/rollback-plan")
+def a2_rollback_plan(payload: A2RollbackPlanRequest) -> dict[str, str]:
+    try:
+        llm = create_llm(payload.apiKey)
+        return generate_rollback_plan(llm, payload.report)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/a2/rollback-run")
+def a2_rollback_run(payload: A2RollbackRunRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey)
+        return run_rollback(llm, payload.plan, payload.stakeholderIds)
+    except Exception as exc:
+        raise _http_error(exc) from exc
