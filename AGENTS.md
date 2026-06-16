@@ -4,14 +4,14 @@
 
 This repository has two main work areas:
 
-- `agent-app/`: FastAPI + CrewAI web app for A1a/A1b elicitation, A2 quality analysis, A3 UML modeling, and A4 SRS drafting.
+- `agent-app/`: FastAPI + CrewAI web app for A1a/A1b elicitation, A2 quality analysis, A3 UML modeling, A4 SRS drafting, and A5 validation.
   - `app.py`: API entrypoint and static web serving.
-  - `agents/`: stakeholder agents, elicitation, quality analysis, UML modeling, SRS drafting, LLM config, and Obsidian record writing.
+  - `agents/`: stakeholder agents, elicitation, quality analysis, UML modeling, SRS drafting, validation, LLM config, and Obsidian record writing.
   - `web/`: plain HTML/CSS/JS frontend.
   - `requirements.txt`: Python dependencies.
 - `obsidian-vault/`: Obsidian knowledge base.
   - `raw/notes/`: elicitation records named `{涉众角色}-{YYYYMMDD-HHMM}-需求记录.md`.
-  - `wiki/summaries/`: A2 reports, UML `.puml` files, SRS drafts, and other design artifacts.
+  - `wiki/summaries/`: A2 reports, UML `.puml` files, SRS drafts, validation reports, and other design artifacts.
   - `wiki/baselines/`: approved baseline snapshots.
   - `templates/`: reusable Markdown templates.
   - `compile.js`: vault integrity checker.
@@ -75,17 +75,17 @@ node --check agent-app\web\app.js
 cd obsidian-vault; node compile.js
 ```
 
-For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`.
+For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`.
 
 ## Commit & Pull Request Guidelines
 
 Existing commits use concise imperative messages, for example `Add CrewAI requirements elicitation app` and `Organize vault and agent app directories`. Follow that style. PRs should describe the user-facing change, list verification commands, and mention any generated records or screenshots when UI behavior changes.
 
-Generated notes, A2 reports, A3 UML files, A4 SRS drafts, and Obsidian plugin/workspace state are project artifacts. Commit them only when the task explicitly asks for those outputs; otherwise keep commits scoped to source changes.
+Generated notes, A2 reports, A3 UML files, A4 SRS drafts, A5 validation reports, and Obsidian plugin/workspace state are project artifacts. Commit them only when the task explicitly asks for those outputs; otherwise keep commits scoped to source changes.
 
 ## Security & Configuration Tips
 
-API keys are entered in the webpage and must not be committed. A1/A2 default to `qwen3.6-flash`; A3/A4 use `qwen3.6-plus`. Keep `.env`, `.venv/`, `__pycache__/`, and local Obsidian plugin state out of source commits unless intentionally requested. Before pushing, search for leaked secrets:
+API keys are entered in the webpage and must not be committed. A1/A2 default to `qwen3.6-flash`; A3/A4 use `qwen3.6-plus`; A5 uses `qwen3.7-plus`. Keep `.env`, `.venv/`, `__pycache__/`, and local Obsidian plugin state out of source commits unless intentionally requested. Before pushing, search for leaked secrets:
 
 ```powershell
 rg -n "ghp_|DASHSCOPE_API_KEY|test-key" -g "!*.git/**" -g "!**/.venv/**"

@@ -9,6 +9,7 @@ const state = {
   a2RollbackPlan: "",
   a3Status: null,
   a4Status: null,
+  a5Status: null,
   savedRecords: [],
   busy: false,
   batchRunning: false,
@@ -34,6 +35,8 @@ const els = {
   a3Model: document.querySelector("#a3Model"),
   a4Status: document.querySelector("#a4Status"),
   a4Generate: document.querySelector("#a4Generate"),
+  a5Status: document.querySelector("#a5Status"),
+  a5Validate: document.querySelector("#a5Validate"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -64,6 +67,7 @@ function setBusy(isBusy) {
   els.a2Rollback.disabled = locked || !hasKey() || !state.a2RollbackPlan;
   els.a3Model.disabled = locked || !hasKey();
   els.a4Generate.disabled = locked || !hasKey();
+  els.a5Validate.disabled = locked || !hasKey();
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -148,7 +152,7 @@ async function api(path, body) {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const data = await response.json();
-  els.modelInfo.textContent = `A1/A2：${data.model} · A3：${data.a3Model} · A4：${data.a4Model} · 百炼兼容接口：${data.baseUrl}`;
+  els.modelInfo.textContent = `A1/A2：${data.model} · A3/A4：${data.a3Model} · A5：${data.a5Model} · 百炼兼容接口：${data.baseUrl}`;
 }
 
 async function loadStakeholders() {
@@ -204,6 +208,15 @@ async function loadA4Status() {
   const reportText = data.latestA2Report ? `A2：${data.latestA2Report}` : "缺少 A2";
   const srsText = data.latestSrs ? `最新 SRS：${data.latestSrs}` : "尚未生成 SRS";
   els.a4Status.textContent = `notes ${data.notesCount} 篇 · UML ${data.umlCount} 个 · ${reportText} · ${srsText} · 模型：${data.a4Model}`;
+}
+
+async function loadA5Status() {
+  const response = await fetch("/api/a5/status");
+  const data = await response.json();
+  state.a5Status = data;
+  const srsText = data.latestSrs ? `SRS：${data.latestSrs}` : "缺少 SRS";
+  const reportText = data.latestA5Report ? `最新报告：${data.latestA5Report}` : "尚未验证";
+  els.a5Status.textContent = `notes ${data.notesCount} 篇 · UML ${data.umlCount} 个 · ${srsText} · ${reportText} · 模型：${data.a5Model}`;
 }
 
 function showA2Output(title, content) {
@@ -459,6 +472,28 @@ els.a4Generate.addEventListener("click", async () => {
   }
 });
 
+els.a5Validate.addEventListener("click", async () => {
+  if (!hasKey()) return;
+  setBusy(true);
+  els.a5Status.textContent = "A5 正在验证 SRS 初稿...";
+  els.a5Status.className = "status ready";
+  try {
+    const data = await api("/api/a5/validate", {
+      apiKey: state.apiKey,
+    });
+    els.a5Status.textContent = `A5 报告已保存：${data.relativePath}`;
+    showA2Output("A5 需求验证报告", `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n${data.content}`);
+    appendSystemMessage(`A5 需求验证报告已保存：${data.relativePath}`);
+    await loadA5Status();
+  } catch (error) {
+    els.a5Status.textContent = `A5 验证失败：${error.message}`;
+    els.a5Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
 els.saveRecord.addEventListener("click", async () => {
   const stakeholder = selectedStakeholder();
   const unsavedRound = state.manualRounds.find((round) => !round.savedPath);
@@ -491,7 +526,7 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status()]).then(() => {
+Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status()]).then(() => {
   renderSavedRecords();
   renderChat();
   updateKeyState();
