@@ -37,6 +37,7 @@ const els = {
   a4Generate: document.querySelector("#a4Generate"),
   a5Status: document.querySelector("#a5Status"),
   a5Validate: document.querySelector("#a5Validate"),
+  a4ReviseFromA5: document.querySelector("#a4ReviseFromA5"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -68,6 +69,7 @@ function setBusy(isBusy) {
   els.a3Model.disabled = locked || !hasKey();
   els.a4Generate.disabled = locked || !hasKey();
   els.a5Validate.disabled = locked || !hasKey();
+  els.a4ReviseFromA5.disabled = locked || !hasKey() || !state.a5Status?.canReviseA4;
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -216,7 +218,10 @@ async function loadA5Status() {
   state.a5Status = data;
   const srsText = data.latestSrs ? `SRS：${data.latestSrs}` : "缺少 SRS";
   const reportText = data.latestA5Report ? `最新报告：${data.latestA5Report}` : "尚未验证";
-  els.a5Status.textContent = `notes ${data.notesCount} 篇 · UML ${data.umlCount} 个 · ${srsText} · ${reportText} · 模型：${data.a5Model}`;
+  const decisionText = data.message ? ` · ${data.message}` : "";
+  els.a5Status.textContent = `notes ${data.notesCount} 篇 · UML ${data.umlCount} 个 · ${srsText} · ${reportText} · 模型：${data.a5Model}${decisionText}`;
+  els.a5Status.className = data.decision === "return_a4" || data.decision === "return_a1" ? "status error" : "status ready";
+  setBusy(state.busy);
 }
 
 function showA2Output(title, content) {
@@ -489,6 +494,32 @@ els.a5Validate.addEventListener("click", async () => {
     els.a5Status.textContent = `A5 验证失败：${error.message}`;
     els.a5Status.className = "status error";
     appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.a4ReviseFromA5.addEventListener("click", async () => {
+  if (!hasKey() || !state.a5Status?.canReviseA4) return;
+  setBusy(true);
+  els.a5Status.textContent = "A4 正在按 A5 退回指令修订 SRS...";
+  els.a5Status.className = "status ready";
+  try {
+    const data = await api("/api/a4/revise-from-a5", {
+      apiKey: state.apiKey,
+    });
+    els.a5Status.textContent = `A4 返修稿已保存：${data.relativePath}`;
+    showA2Output(
+      "A4 SRS 返修稿",
+      `${data.summary}\n\n## 保存路径\n${data.relativePath}\n\n## 返修来源\n- SRS：${data.sourceSrs}\n- A5：${data.sourceA5Report}\n\n${data.content}`
+    );
+    appendSystemMessage(`A4 已按 A5 退回指令生成返修稿：${data.relativePath}`);
+    await loadA4Status();
+    await loadA5Status();
+  } catch (error) {
+    els.a5Status.textContent = `A4 返修失败，未生成新 SRS 文件：${error.message}`;
+    els.a5Status.className = "status error";
+    appendSystemMessage(`A4 返修失败，未写入知识库：${error.message}`);
   } finally {
     setBusy(false);
   }

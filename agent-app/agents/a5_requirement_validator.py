@@ -54,17 +54,55 @@ def _format_uml_inputs(files: list[dict[str, str]]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def _classify_report(content: str) -> dict[str, str | bool]:
+    if "建议退回 A4" in content or "建议退回A4" in content:
+        return {
+            "decision": "return_a4",
+            "message": "A5 建议退回 A4：无需重新获取涉众需求，先修订 SRS 后重新验证。",
+            "canReviseA4": True,
+        }
+    if "建议退回 A1" in content or "建议退回A1" in content:
+        return {
+            "decision": "return_a1",
+            "message": "A5 建议退回 A1：需要补充涉众访谈后再生成 SRS。",
+            "canReviseA4": False,
+        }
+    if "建议直接提交 CCB" in content or "无问题" in content:
+        return {
+            "decision": "pass",
+            "message": "A5 建议直接提交 CCB，当前验证通过。",
+            "canReviseA4": False,
+        }
+    if "建议提交 CCB" in content:
+        return {
+            "decision": "submit_ccb",
+            "message": "A5 建议提交 CCB 审批，并携带问题清单。",
+            "canReviseA4": False,
+        }
+    return {
+        "decision": "unknown",
+        "message": "尚未识别 A5 评审结论。",
+        "canReviseA4": False,
+    }
+
+
 def a5_status() -> dict:
     notes = read_note_records()
     uml_files = _read_uml_files()
     srs = _latest_srs()
     report = _latest_a5_report()
+    report_status = _classify_report(report.read_text(encoding="utf-8")) if report else {
+        "decision": "not_run",
+        "message": "尚未运行 A5 验证。",
+        "canReviseA4": False,
+    }
     return {
         "notesCount": len(notes),
         "umlCount": len(uml_files),
         "latestSrs": _relative(srs) if srs else "",
         "latestA5Report": _relative(report) if report else "",
         "a5Model": A5_MODEL,
+        **report_status,
     }
 
 

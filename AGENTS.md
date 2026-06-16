@@ -77,11 +77,13 @@ cd obsidian-vault; node compile.js
 
 For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`.
 
+A5 can drive an A4 repair pass through `/api/a4/revise-from-a5`. Repaired SRS drafts are saved only after validation passes. Keep the repair checks strict for invalid data dictionary entries, but avoid rejecting valid business text or repair notes that merely reference old issues.
+
 ## Commit & Pull Request Guidelines
 
 Existing commits use concise imperative messages, for example `Add CrewAI requirements elicitation app` and `Organize vault and agent app directories`. Follow that style. PRs should describe the user-facing change, list verification commands, and mention any generated records or screenshots when UI behavior changes.
 
-Generated notes, A2 reports, A3 UML files, A4 SRS drafts, A5 validation reports, and Obsidian plugin/workspace state are project artifacts. Commit them only when the task explicitly asks for those outputs; otherwise keep commits scoped to source changes.
+Generated notes, A2 reports, A3 UML files, A4 SRS drafts, A5 validation reports, and Obsidian plugin/workspace state are project artifacts. Commit them only when the task explicitly asks for those outputs; otherwise keep commits scoped to source changes. Failed A4 repair drafts are intentionally not written to the vault.
 
 ## Security & Configuration Tips
 

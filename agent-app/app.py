@@ -12,7 +12,7 @@ from agents.a1a_stakeholders import create_a1a_agent, list_stakeholders
 from agents.a2_quality_analyzer import analyze_notes, generate_rollback_plan, notes_summary, run_rollback
 from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summarize_requirements
 from agents.a3_modeler import A3_MODEL, a3_status, run_a3_modeling
-from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs
+from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs, revise_srs_from_a5
 from agents.a5_requirement_validator import A5_MODEL, a5_status, validate_requirements
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import list_records, save_record
@@ -202,6 +202,15 @@ def a4_generate(payload: A2AnalyzeRequest) -> dict[str, Any]:
     try:
         llm = create_llm(payload.apiKey, model_override=A4_MODEL)
         return generate_srs(llm)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/a4/revise-from-a5")
+def a4_revise_from_a5(payload: A2AnalyzeRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey, model_override=A4_MODEL)
+        return revise_srs_from_a5(llm)
     except Exception as exc:
         raise _http_error(exc) from exc
 
