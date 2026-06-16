@@ -7,6 +7,7 @@ const state = {
   a2Report: "",
   a2ReportPath: "",
   a2RollbackPlan: "",
+  savedRecords: [],
   busy: false,
   batchRunning: false,
 };
@@ -88,8 +89,14 @@ async function saveRound(stakeholderId, roundHistory, label) {
     history: roundHistory,
     summary: "",
   });
-  await loadRecords();
+  addSavedRecord(saved.relativePath);
   return `${label}已保存：${saved.relativePath}`;
+}
+
+function addSavedRecord(relativePath) {
+  if (!relativePath || state.savedRecords.includes(relativePath)) return;
+  state.savedRecords.unshift(relativePath);
+  renderSavedRecords();
 }
 
 function renderChat() {
@@ -149,19 +156,18 @@ async function loadStakeholders() {
   updateStakeholderInfo();
 }
 
-async function loadRecords() {
-  const response = await fetch("/api/records");
-  const records = await response.json();
+function renderSavedRecords() {
   els.records.innerHTML = "";
-  if (records.length === 0) {
+  if (state.savedRecords.length === 0) {
     const item = document.createElement("li");
-    item.textContent = "暂无记录";
+    item.textContent = "本页面暂无保存记录";
     els.records.appendChild(item);
     return;
   }
-  for (const record of records) {
+  for (const relativePath of state.savedRecords) {
     const item = document.createElement("li");
-    item.textContent = `${record.name} (${record.modified})`;
+    item.textContent = relativePath;
+    item.title = relativePath;
     els.records.appendChild(item);
   }
 }
@@ -365,7 +371,9 @@ els.a2Rollback.addEventListener("click", async () => {
     });
     els.a2Status.textContent = `A2 回退访谈完成：已保存 ${data.count} 条补充记录`;
     appendSystemMessage(`A2 回退访谈完成：已保存 ${data.count} 条补充记录。`);
-    await loadRecords();
+    for (const item of data.results || []) {
+      addSavedRecord(item.recordPath);
+    }
     await loadA2NotesStatus();
   } catch (error) {
     els.a2Status.textContent = `A2 回退访谈失败：${error.message}`;
@@ -391,8 +399,8 @@ els.saveRecord.addEventListener("click", async () => {
       summary: "",
     });
     unsavedRound.savedPath = data.relativePath;
+    addSavedRecord(data.relativePath);
     appendSystemMessage(`已保存手动访谈：${data.relativePath}`);
-    await loadRecords();
   } catch (error) {
     appendSystemMessage(error.message);
   } finally {
@@ -408,7 +416,8 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadRecords(), loadA2NotesStatus()]).then(() => {
+Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus()]).then(() => {
+  renderSavedRecords();
   renderChat();
   updateKeyState();
 });
