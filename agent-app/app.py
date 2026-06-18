@@ -17,6 +17,7 @@ from agents.a3_modeler import A3_MODEL, a3_status, run_a3_modeling
 from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs, revise_srs_from_a5
 from agents.a5_requirement_validator import A5_MODEL, a5_status, validate_requirements
 from agents.a6_baseline_manager import A6_MODEL, a6_status, create_baseline
+from agents.design_architect import DESIGN_MODEL, design_status, run_design_architecture
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import REPO_ROOT, VAULT_ROOT, list_records, save_record
 
@@ -128,6 +129,7 @@ def config() -> dict[str, str]:
         "a4Model": A4_MODEL,
         "a5Model": A5_MODEL,
         "a6Model": A6_MODEL,
+        "designModel": DESIGN_MODEL,
         "baseUrl": get_base_url(),
     }
 
@@ -414,5 +416,19 @@ def a6_create_baseline(payload: A6BaselineRequest) -> dict[str, Any]:
     try:
         llm = create_llm(payload.apiKey, model_override=A6_MODEL)
         return create_baseline(llm, payload.ccbConclusion, payload.acceptA5Risks)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.get("/api/design/status")
+def design_architecture_status() -> dict[str, Any]:
+    return design_status()
+
+
+@app.post("/api/design/run")
+def design_architecture_run(payload: A2AnalyzeRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey, model_override=DESIGN_MODEL)
+        return run_design_architecture(llm)
     except Exception as exc:
         raise _http_error(exc) from exc

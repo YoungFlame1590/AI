@@ -3,7 +3,7 @@
 本仓库按职责拆分为两个主目录：
 
 ```text
-agent-app/          A1a/A1b/A2/A3/A4/A5/A6 CrewAI 需求工程 Web 应用
+agent-app/          A1a/A1b/A2/A3/A4/A5/A6 与设计阶段 CrewAI Web 应用
 obsidian-vault/     Obsidian 知识库与课程设计资产
 ```
 
@@ -43,6 +43,19 @@ obsidian-vault/     Obsidian 知识库与课程设计资产
 - `A4 SRS 文档生成`：生成或按 A5 退回指令返修 `SRS-初稿-vX.Y.md`。
 - `A5 需求验证`：生成 `需求验证报告-vX.Y.md`，作为 CCB 评审建议与风险清单。
 - `A6 需求基线`：在 A5 已验证当前 SRS 后创建 `wiki/baselines/BL-YYYYMMDD-NN/`；若 A5 未通过，需要勾选风险确认后由 CCB 带风险批准。
+
+## 设计阶段第一步
+
+页面侧边栏包含 `设计阶段：知识图谱与架构选型` 面板。该智能体读取最新 A6 基线中的 `SRS-正式版.md` 和 `UML模型/` 快照，生成：
+
+- `知识图谱节点清单-vX.Y.md`
+- `架构选型报告-vX.Y.md`
+- `ASD-架构风格声明-vX.Y.md`
+- `MDS-模块划分方案-vX.Y.md`
+- `DTS-依赖拓扑-vX.Y.md`
+- `ADR-001-架构选型-vX.Y.md`
+
+设计阶段以正式基线为唯一权威输入；没有 `BL-YYYYMMDD-NN` 基线时，请先完成 A6。
 
 ## n8n 工作流
 
@@ -103,7 +116,7 @@ obsidian-vault/wiki/summaries/n8n工作流/ccb-pending/
 ### agent-app
 
 - `app.py`：FastAPI 后端。
-- `agents/`：A1a/A1b/A2/A3/A4/A5/A6 智能体、百炼 LLM 配置、记录写入逻辑。
+- `agents/`：A1a/A1b/A2/A3/A4/A5/A6、设计阶段智能体、百炼 LLM 配置、记录写入逻辑。
 - `web/`：本地页面 HTML/CSS/JS。
 - `requirements.txt`：Python 依赖。
 - `.env.example`：可选模型与接口配置示例，不存放真实 key。
@@ -134,7 +147,7 @@ node compile.js
 
 - A1/A2：`qwen3.6-flash`
 - A3/A4：`qwen3.6-plus`
-- A5/A6：`qwen3.7-plus`
+- A5/A6/设计阶段：`qwen3.7-plus`
 - 默认接口：`https://dashscope.aliyuncs.com/compatible-mode/v1`
 
 如需覆盖：

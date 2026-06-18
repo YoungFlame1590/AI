@@ -11,6 +11,7 @@ const state = {
   a4Status: null,
   a5Status: null,
   a6Status: null,
+  designStatus: null,
   savedRecords: [],
   busy: false,
   batchRunning: false,
@@ -43,6 +44,8 @@ const els = {
   ccbConclusion: document.querySelector("#ccbConclusion"),
   acceptA5Risks: document.querySelector("#acceptA5Risks"),
   a6CreateBaseline: document.querySelector("#a6CreateBaseline"),
+  designStatus: document.querySelector("#designStatus"),
+  designRun: document.querySelector("#designRun"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -78,6 +81,7 @@ function setBusy(isBusy) {
   const needsRiskAcceptance = !!state.a6Status?.requiresA5RiskAcceptance;
   els.acceptA5Risks.disabled = locked || !needsRiskAcceptance;
   els.a6CreateBaseline.disabled = locked || !hasKey() || !state.a6Status?.canCreateBaseline || (needsRiskAcceptance && !els.acceptA5Risks.checked);
+  els.designRun.disabled = locked || !hasKey() || !state.designStatus?.canRun;
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -162,7 +166,7 @@ async function api(path, body) {
 async function loadConfig() {
   const response = await fetch("/api/config");
   const data = await response.json();
-  els.modelInfo.textContent = `A1/A2：${data.model} · A3/A4：${data.a3Model} · A5：${data.a5Model} · A6：${data.a6Model} · 百炼兼容接口：${data.baseUrl}`;
+  els.modelInfo.textContent = `A1/A2：${data.model} · A3/A4：${data.a3Model} · A5/A6：${data.a5Model} · 设计阶段：${data.designModel} · 百炼兼容接口：${data.baseUrl}`;
 }
 
 async function loadStakeholders() {
@@ -245,6 +249,18 @@ async function loadA6Status() {
   if (!data.requiresA5RiskAcceptance) {
     els.acceptA5Risks.checked = false;
   }
+  setBusy(state.busy);
+}
+
+async function loadDesignStatus() {
+  const response = await fetch("/api/design/status");
+  const data = await response.json();
+  state.designStatus = data;
+  const baselineText = data.latestBaseline ? `基线：${data.latestBaseline}` : "缺少需求基线";
+  const srsText = data.srsPath ? `SRS：${data.srsPath}` : "缺少 SRS 正式版";
+  const outputCount = (data.designOutputs || []).length;
+  els.designStatus.textContent = `${baselineText} · ${srsText} · UML ${data.umlCount} 个（用例图 ${data.useCaseCount}，活动图 ${data.activityCount}） · 已有设计产物 ${outputCount} 份 · 模型：${data.designModel} · ${data.message}`;
+  els.designStatus.className = data.canRun ? "status ready" : "status error";
   setBusy(state.busy);
 }
 
@@ -574,9 +590,37 @@ els.a6CreateBaseline.addEventListener("click", async () => {
     );
     appendSystemMessage(`A6 需求基线已创建：${data.relativePath}`);
     await loadA6Status();
+    await loadDesignStatus();
   } catch (error) {
     els.a6Status.textContent = `A6 创建基线失败：${error.message}`;
     els.a6Status.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.designRun.addEventListener("click", async () => {
+  if (!hasKey() || !state.designStatus?.canRun) return;
+  setBusy(true);
+  els.designStatus.textContent = "设计阶段智能体正在构建知识图谱并评估架构选型...";
+  els.designStatus.className = "status ready";
+  try {
+    const data = await api("/api/design/run", {
+      apiKey: state.apiKey,
+    });
+    const fileList = (data.files || []).map((item) => `- ${item}`).join("\n");
+    const counts = data.nodeCounts || {};
+    els.designStatus.textContent = `设计阶段第一步完成：${data.selectedArchitecture}`;
+    showA2Output(
+      "设计阶段：知识图谱与架构选型",
+      `${data.completion}\n\n## 输入基线\n- ${data.latestBaseline}\n- ${data.srsPath}\n\n## 知识图谱节点\nActor ${counts.actor || 0} / Component ${counts.component || 0} / Interface ${counts.interface || 0} / Data ${counts.data || 0} / Constraint ${counts.constraint || 0} / Total ${counts.total || 0}\n\n## 生成文件\n${fileList}\n\n## 摘要\n${data.summary}`
+    );
+    appendSystemMessage(`设计阶段第一步完成：${data.selectedArchitecture}，已生成 6 份产物。`);
+    await loadDesignStatus();
+  } catch (error) {
+    els.designStatus.textContent = `设计阶段运行失败：${error.message}`;
+    els.designStatus.className = "status error";
     appendSystemMessage(error.message);
   } finally {
     setBusy(false);
@@ -615,7 +659,12 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.all([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status(), loadA6Status()]).then(() => {
+Promise.allSettled([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status(), loadA6Status(), loadDesignStatus()]).then((results) => {
+  const failed = results.filter((result) => result.status === "rejected");
+  if (failed.length > 0) {
+    const message = failed.map((result) => result.reason?.message || "状态读取失败").join("；");
+    appendSystemMessage(`部分状态读取失败：${message}`);
+  }
   renderSavedRecords();
   renderChat();
   updateKeyState();
