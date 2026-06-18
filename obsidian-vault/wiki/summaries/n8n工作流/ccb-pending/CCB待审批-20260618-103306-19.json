@@ -1,0 +1,16 @@
+{
+  "createdAt": "2026-06-18T10:33:06",
+  "workflowName": "需求开发全流程（工作流1）",
+  "executionId": "19",
+  "resumeUrl": "http://localhost:5678/webhook-waiting/19/ccb-approval?signature=c2f522c5067a6f622c6ed2b9b37ef7d5a6fa0835786fc0c76425ce2b7c736764",
+  "latestSrs": "obsidian-vault/wiki/summaries/SRS-初稿-v1.0.md",
+  "latestA5Report": "obsidian-vault/wiki/summaries/需求验证报告-v1.0.md",
+  "a5Decision": "return_a1",
+  "a5Summary": "A5 建议退回 A1：需要补充涉众访谈后再生成 SRS。",
+  "allowedDecisions": [
+    "approved",
+    "approvedWithRisk",
+    "rejected",
+    "revise"
+  ]
+}

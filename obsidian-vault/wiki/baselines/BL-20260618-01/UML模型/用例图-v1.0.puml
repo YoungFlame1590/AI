@@ -1,0 +1,44 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+actor 客户 as Cust
+actor 门店店员 as Clerk
+actor 门店店长 as Manager
+actor 总部运营管理员 as HQ
+actor 财务人员 as Fin
+actor 配送/外协人员 as Del
+actor 系统管理员 as Sys
+
+rectangle 图文快印门店连锁管理系统 {
+  usecase "提交订单与文件" as UC1
+  usecase "接单与录入信息" as UC2
+  usecase "自动报价与折扣审批" as UC3
+  usecase "订单质检与状态流转" as UC4
+  usecase "生产派单与工位推送" as UC5
+  usecase "异常处理与人工兜底" as UC6
+  usecase "配送任务接收与执行" as UC7
+  usecase "日结对账与报表生成" as UC8
+  usecase "权限配置与审计日志" as UC9
+
+  Cust --> UC1
+  Clerk --> UC2
+  Manager --> UC2
+  Clerk --> UC3
+  Manager --> UC3
+  HQ --> UC3
+  Clerk --> UC4
+  Sys --> UC4
+  Sys --> UC5
+  Manager --> UC5
+  Del --> UC7
+  Fin --> UC8
+  Sys --> UC9
+
+  UC2 -down-> UC3 : <<include>>
+  UC4 -down-> UC6 : <<extend>>
+  UC5 -down-> UC7 : <<include>>
+  UC8 -down-> UC6 : <<include>>
+  UC9 -down-> UC3 : <<include>>
+  UC9 -down-> UC6 : <<include>>
+}
+@enduml
