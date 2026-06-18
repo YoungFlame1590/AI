@@ -1,0 +1,272 @@
+{
+  "name": "需求开发全流程（工作流1）",
+  "nodes": [
+    {
+      "id": "start-webhook",
+      "name": "启动需求开发流程",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "requirements-workflow-1/start",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "normalize-input",
+      "name": "准备执行参数",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst stakeholders = body.stakeholders ?? [\n  { id: 'clerk', name: '门店店员' },\n  { id: 'manager', name: '门店店长' },\n  { id: 'operation', name: '总部运营管理员' },\n  { id: 'finance', name: '财务人员' },\n  { id: 'customer', name: '客户' },\n  { id: 'delivery', name: '配送/外协人员' },\n  { id: 'admin', name: '系统管理员' }\n];\nif (!body.apiKey) throw new Error('缺少 apiKey，请在启动 Webhook 请求体中传入百炼 API key。');\nreturn [{ json: {\n  projectName: body.projectName ?? '图文快印门店连锁管理系统',\n  apiKey: body.apiKey,\n  agentBaseUrl: (body.agentBaseUrl ?? 'http://127.0.0.1:8000').replace(/\\/$/, ''),\n  stakeholders,\n  roundsPerStakeholder: Number(body.roundsPerStakeholder ?? 1),\n  acceptA5Risks: Boolean(body.acceptA5Risks ?? false),\n  ccbConclusion: body.ccbConclusion ?? '通过（无保留意见）'\n}}];"
+      }
+    },
+    {
+      "id": "a1b-batch",
+      "name": "A1b 批量访谈并保存",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        540,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/n8n/a1b-batch",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey, stakeholders: $('准备执行参数').first().json.stakeholders, roundsPerStakeholder: $('准备执行参数').first().json.roundsPerStakeholder } }}",
+        "options": {
+          "timeout": 900000
+        },
+        "specifyBody": "json"
+      }
+    },
+    {
+      "id": "a2-analyze",
+      "name": "A2 需求质量分析",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a2/analyze",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
+        "options": {
+          "timeout": 900000
+        },
+        "specifyBody": "json"
+      }
+    },
+    {
+      "id": "a3-model",
+      "name": "A3 UML 建模",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a3/model",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
+        "options": {
+          "timeout": 900000
+        },
+        "specifyBody": "json"
+      }
+    },
+    {
+      "id": "a4-generate",
+      "name": "A4 SRS 生成",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a4/generate",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
+        "options": {
+          "timeout": 900000
+        },
+        "specifyBody": "json"
+      }
+    },
+    {
+      "id": "a5-validate",
+      "name": "A5 需求验证",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a5/validate",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
+        "options": {
+          "timeout": 900000
+        },
+        "specifyBody": "json"
+      }
+    },
+    {
+      "id": "a6-create",
+      "name": "A6 创建需求基线",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2820,
+        -120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a6/create-baseline",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey, ccbConclusion: $('准备执行参数').first().json.ccbConclusion, acceptA5Risks: $('准备执行参数').first().json.acceptA5Risks } }}",
+        "options": {
+          "timeout": 900000
+        },
+        "specifyBody": "json"
+      }
+    },
+    {
+      "id": "finish-success",
+      "name": "完成通知",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        -120
+      ],
+      "parameters": {
+        "jsCode": "const baseline = $json;\nreturn [{ json: {\n  status: 'completed',\n  message: '需求开发全流程完成，基线已创建。',\n  baselinePath: baseline.relativePath,\n  baselineId: baseline.baselineId,\n  requirementCount: baseline.requirementCount,\n  files: baseline.files\n}}];"
+      }
+    }
+  ],
+  "connections": {
+    "启动需求开发流程": {
+      "main": [
+        [
+          {
+            "node": "准备执行参数",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备执行参数": {
+      "main": [
+        [
+          {
+            "node": "A1b 批量访谈并保存",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A1b 批量访谈并保存": {
+      "main": [
+        [
+          {
+            "node": "A2 需求质量分析",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 需求质量分析": {
+      "main": [
+        [
+          {
+            "node": "A3 UML 建模",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A3 UML 建模": {
+      "main": [
+        [
+          {
+            "node": "A4 SRS 生成",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A4 SRS 生成": {
+      "main": [
+        [
+          {
+            "node": "A5 需求验证",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A5 需求验证": {
+      "main": [
+        [
+          {
+            "node": "A6 创建需求基线",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A6 创建需求基线": {
+      "main": [
+        [
+          {
+            "node": "完成通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "workflow-1-print-chain-requirements",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {}
+}

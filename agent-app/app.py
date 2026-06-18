@@ -60,6 +60,17 @@ class A6BaselineRequest(BaseModel):
     acceptA5Risks: bool = False
 
 
+class N8nStakeholder(BaseModel):
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+
+
+class N8nA1bBatchRequest(BaseModel):
+    apiKey: str = ""
+    stakeholders: list[N8nStakeholder] | None = None
+    roundsPerStakeholder: int = 3
+
+
 class A2RollbackPlanRequest(BaseModel):
     apiKey: str = ""
     report: str = Field(min_length=1)
@@ -152,6 +163,59 @@ def save(payload: SaveRecordRequest) -> dict[str, str]:
 @app.get("/api/records")
 def records() -> list[dict[str, Any]]:
     return list_records()
+
+
+@app.post("/api/n8n/a1b-batch")
+def n8n_a1b_batch(payload: N8nA1bBatchRequest) -> dict[str, Any]:
+    prompts = {
+        "clerk": "请从门店店员角度说明接单、报价、生产流转、交付时最容易出错的场景。",
+        "manager": "请从门店店长角度说明排产调度、折扣审批、异常处理和门店管理诉求。",
+        "operation": "请从总部运营管理员角度说明连锁门店运营、规则配置、报表和风险管控诉求。",
+        "finance": "请从财务人员角度说明收款、对账、发票、退款和外协成本核算诉求。",
+        "customer": "请从客户角度说明下单、透明报价、订单进度、交付和售后退款诉求。",
+        "delivery": "请从配送/外协人员角度说明任务流转、签收、异常上报和外协协作诉求。",
+        "admin": "请从系统管理员角度说明权限、审计、配置变更、性能和故障恢复诉求。",
+    }
+    try:
+        rounds = max(1, min(int(payload.roundsPerStakeholder or 3), 5))
+        stakeholders = payload.stakeholders or [N8nStakeholder(id=item["id"], name=item["name"]) for item in list_stakeholders()]
+        llm = create_llm(payload.apiKey)
+        a1b_agent = create_a1b_agent(llm)
+        saved: list[dict[str, Any]] = []
+        for stakeholder in stakeholders:
+            context: list[dict[str, str]] = []
+            for round_index in range(1, rounds + 1):
+                if round_index == 1:
+                    context.append(
+                        {
+                            "speaker": "n8n工作流",
+                            "content": prompts.get(
+                                stakeholder.id,
+                                f"请说明{stakeholder.name}的核心需求、痛点、异常场景和验收期望。",
+                            ),
+                        }
+                    )
+                question = next_question(a1b_agent, stakeholder.id, context)
+                history_with_question = context + [{"speaker": "A1b需求获取智能体", "content": question}]
+                a1a_agent = create_a1a_agent(stakeholder.id, llm)
+                answer = ask_a1a(a1a_agent, stakeholder.id, question, history_with_question)
+                round_history = [
+                    {"speaker": "A1b需求获取智能体", "content": question},
+                    {"speaker": f"A1a-{stakeholder.name}", "content": answer},
+                ]
+                record = save_record(stakeholder.id, round_history, "")
+                context.extend(round_history)
+                saved.append(
+                    {
+                        "stakeholderId": stakeholder.id,
+                        "stakeholderName": stakeholder.name,
+                        "round": round_index,
+                        "recordPath": record["relativePath"],
+                    }
+                )
+        return {"a1RecordCount": len(saved), "a1Records": saved}
+    except Exception as exc:
+        raise _http_error(exc) from exc
 
 
 @app.get("/api/a2/notes")

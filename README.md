@@ -44,6 +44,44 @@ obsidian-vault/     Obsidian 知识库与课程设计资产
 - `A5 需求验证`：生成 `需求验证报告-vX.Y.md`，作为 CCB 评审建议与风险清单。
 - `A6 需求基线`：在 A5 已验证当前 SRS 后创建 `wiki/baselines/BL-YYYYMMDD-NN/`；若 A5 未通过，需要勾选风险确认后由 CCB 带风险批准。
 
+## n8n 工作流
+
+本仓库提供可导入 n8n 的需求开发全流程工作流：
+
+```text
+obsidian-vault/wiki/summaries/n8n工作流/需求开发全流程-工作流1.json
+```
+
+Docker Desktop 可用后，双击根目录脚本启动 n8n：
+
+```text
+启动n8n-Docker.bat
+```
+
+n8n 页面地址：
+
+```text
+http://localhost:5678
+```
+
+导入工作流后，Webhook 启动参数中的 `agentBaseUrl` 使用：
+
+```json
+{
+  "agentBaseUrl": "http://host.docker.internal:8000"
+}
+```
+
+这是因为 Docker 容器内的 `127.0.0.1` 指向容器自身，不是 Windows 宿主机。
+
+导入并激活工作流后，可双击根目录脚本触发完整流程：
+
+```text
+一键启动n8n工作流.bat
+```
+
+脚本会检查 agent-app 与 n8n 是否在线，提示输入百炼 API key，并用正确的 JSON 请求启动 `requirements-workflow-1/start`。API key 只存在于本次命令内存中，不写入文件。
+
 ## 目录说明
 
 ### agent-app
