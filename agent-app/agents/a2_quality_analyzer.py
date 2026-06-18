@@ -22,6 +22,7 @@ class NoteRecord:
 
 ROLE_TO_ID = {profile.name: profile.id for profile in STAKEHOLDERS.values()}
 ROLE_TO_ID["配送外协人员"] = "delivery"
+ROLLBACK_SEVERITY_KEYWORDS = ("高", "紧急", "严重", "阻塞")
 
 
 def read_note_records() -> list[NoteRecord]:
@@ -104,6 +105,93 @@ def save_report(content: str) -> dict[str, str]:
     return {"path": str(path), "relativePath": str(path.relative_to(REPO_ROOT)).replace("\\", "/")}
 
 
+def _split_markdown_table_row(line: str) -> list[str] | None:
+    text = line.strip()
+    if not text.startswith("|") or not text.endswith("|"):
+        return None
+
+    cells = []
+    current = []
+    escaped = False
+    for char in text[1:-1]:
+        if char == "\\" and not escaped:
+            escaped = True
+            current.append(char)
+            continue
+        if char == "|" and not escaped:
+            cells.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+        escaped = False
+    cells.append("".join(current).strip())
+    return cells
+
+
+def _is_separator_row(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
+
+
+def extract_structured_issues(report: str) -> list[dict]:
+    rows: list[dict] = []
+    headers: list[str] | None = None
+    for line in report.splitlines():
+        cells = _split_markdown_table_row(line)
+        if not cells:
+            if headers:
+                break
+            continue
+        if _is_separator_row(cells):
+            continue
+        if "问题编号" in cells and "严重程度" in cells:
+            headers = cells
+            continue
+        if not headers or len(cells) != len(headers):
+            continue
+
+        row = dict(zip(headers, cells))
+        stakeholder = row.get("来源涉众", "").strip()
+        severity = row.get("严重程度", "").strip()
+        description = row.get("问题描述", "").strip()
+        handling = row.get("建议处理方式", "").strip()
+        rows.append(
+            {
+                "id": row.get("问题编号", "").strip(),
+                "stakeholder": stakeholder,
+                "stakeholderId": ROLE_TO_ID.get(stakeholder, ""),
+                "quote": row.get("原始需求摘录", "").strip(),
+                "type": row.get("问题类型", "").strip(),
+                "severity": severity,
+                "description": description,
+                "suggestion": handling,
+                "requiresRollback": any(
+                    keyword in f"{severity} {description} {handling}" for keyword in ROLLBACK_SEVERITY_KEYWORDS
+                ),
+            }
+        )
+    return rows
+
+
+def analyze_report_structure(report: str) -> dict:
+    issues = extract_structured_issues(report)
+    rollback_issues = [issue for issue in issues if issue["requiresRollback"]]
+    stakeholder_ids = sorted({issue["stakeholderId"] for issue in rollback_issues if issue["stakeholderId"]})
+    has_severe_issues = bool(rollback_issues)
+    return {
+        "decision": "continue_with_risk" if has_severe_issues else "continue",
+        "a2RiskLevel": "high" if has_severe_issues else "normal",
+        "hasSevereIssues": has_severe_issues,
+        "issues": issues,
+        "rollbackIssues": rollback_issues,
+        "rollbackStakeholderIds": stakeholder_ids,
+        "message": (
+            "A2 发现高/紧急风险，n8n 将作为风险提示继续推进；如 CCB 要求补访，可手动执行 A2 回退。"
+            if has_severe_issues
+            else "A2 未发现高/紧急风险，可继续进入 A3。"
+        ),
+    }
+
+
 def analyze_notes(llm) -> dict[str, str]:
     records = read_note_records()
     if not records:
@@ -165,6 +253,12 @@ def analyze_notes(llm) -> dict[str, str]:
     )
     saved = save_report(report)
     return {**saved, "content": report}
+
+
+def analyze_notes_structured(llm) -> dict:
+    result = analyze_notes(llm)
+    structure = analyze_report_structure(result["content"])
+    return {**result, **structure}
 
 
 def generate_rollback_plan(llm, report: str) -> dict[str, str]:
@@ -264,3 +358,17 @@ def run_rollback(llm, plan: str, selected_stakeholder_ids: list[str] | None = No
             )
 
     return {"count": len(results), "results": results}
+
+
+def run_n8n_rollback(llm, report: str, selected_stakeholder_ids: list[str] | None = None) -> dict:
+    structure = analyze_report_structure(report)
+    stakeholder_ids = selected_stakeholder_ids or structure["rollbackStakeholderIds"]
+    if not stakeholder_ids and structure["hasSevereIssues"]:
+        stakeholder_ids = None
+    plan = generate_rollback_plan(llm, report)
+    result = run_rollback(llm, plan["content"], stakeholder_ids)
+    return {
+        "plan": plan["content"],
+        "selectedStakeholderIds": stakeholder_ids or [],
+        **result,
+    }

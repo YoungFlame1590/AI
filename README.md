@@ -82,6 +82,22 @@ http://localhost:5678
 
 脚本会检查 agent-app 与 n8n 是否在线，提示输入百炼 API key，并用正确的 JSON 请求启动 `requirements-workflow-1/start`。API key 只存在于本次命令内存中，不写入文件。
 
+工作流会按 `A1 → A2 → A2风险提示 → A3 → A4 → A5 → CCB人工审批 → A6` 执行。A2 若发现高/紧急问题，只记录为风险提示并继续推进；如 CCB 或教师要求补访，可在页面手动执行 A2 回退后重新运行工作流。
+
+当 n8n 停在 `CCB审批等待` 时，知识库会生成待审批文件：
+
+```text
+obsidian-vault/wiki/summaries/n8n工作流/ccb-pending/
+```
+
+此时双击根目录脚本提交 CCB 决策：
+
+```text
+一键CCB审批.bat
+```
+
+审批结论为 `approved` 或 `approvedWithRisk` 时，工作流继续执行 A6 创建基线；`rejected` 或 `revise` 不创建基线。
+
 ## 目录说明
 
 ### agent-app

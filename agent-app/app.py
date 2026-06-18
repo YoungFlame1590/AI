@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,14 +11,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agents.a1a_stakeholders import create_a1a_agent, list_stakeholders
-from agents.a2_quality_analyzer import analyze_notes, generate_rollback_plan, notes_summary, run_rollback
+from agents.a2_quality_analyzer import analyze_notes, analyze_notes_structured, generate_rollback_plan, notes_summary, run_n8n_rollback, run_rollback
 from agents.a1b_elicitor import ask_a1a, create_a1b_agent, next_question, summarize_requirements
 from agents.a3_modeler import A3_MODEL, a3_status, run_a3_modeling
 from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs, revise_srs_from_a5
 from agents.a5_requirement_validator import A5_MODEL, a5_status, validate_requirements
 from agents.a6_baseline_manager import A6_MODEL, a6_status, create_baseline
 from agents.llm_config import create_llm, get_base_url, get_model_name
-from agents.recording import list_records, save_record
+from agents.recording import REPO_ROOT, VAULT_ROOT, list_records, save_record
 
 
 ROOT = Path(__file__).resolve().parent
@@ -82,6 +84,22 @@ class A2RollbackRunRequest(BaseModel):
     stakeholderIds: list[str] | None = None
 
 
+class N8nA2RollbackRequest(BaseModel):
+    apiKey: str = ""
+    report: str = Field(min_length=1)
+    stakeholderIds: list[str] | None = None
+
+
+class N8nCcbPendingRequest(BaseModel):
+    resumeUrl: str = Field(min_length=1)
+    executionId: str = ""
+    workflowName: str = "需求开发全流程（工作流1）"
+    latestSrs: str = ""
+    latestA5Report: str = ""
+    a5Decision: str = ""
+    a5Summary: str = ""
+
+
 def _history_dicts(history: list[ConversationItem]) -> list[dict[str, str]]:
     return [item.model_dump() for item in history]
 
@@ -91,6 +109,10 @@ def _http_error(exc: Exception) -> HTTPException:
     if "Authentication" in message or "api_key" in message.lower():
         message = "百炼 API key 校验失败，请检查页面输入的 key。"
     return HTTPException(status_code=400, detail=message)
+
+
+def _markdown_table_cell(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\r\n", "<br>").replace("\n", "<br>").strip()
 
 
 @app.get("/")
@@ -216,6 +238,87 @@ def n8n_a1b_batch(payload: N8nA1bBatchRequest) -> dict[str, Any]:
         return {"a1RecordCount": len(saved), "a1Records": saved}
     except Exception as exc:
         raise _http_error(exc) from exc
+
+
+@app.post("/api/n8n/a2-analyze")
+def n8n_a2_analyze(payload: A2AnalyzeRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey)
+        return analyze_notes_structured(llm)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/n8n/a2-rollback")
+def n8n_a2_rollback(payload: N8nA2RollbackRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey)
+        return run_n8n_rollback(llm, payload.report, payload.stakeholderIds)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.post("/api/n8n/ccb-pending")
+def n8n_ccb_pending(payload: N8nCcbPendingRequest) -> dict[str, str]:
+    pending_dir = VAULT_ROOT / "wiki" / "summaries" / "n8n工作流" / "ccb-pending"
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    execution_label = payload.executionId.strip() or timestamp
+    safe_execution = "".join(char if char.isalnum() or char in "-_" else "-" for char in execution_label)
+    json_path = pending_dir / f"CCB待审批-{timestamp}-{safe_execution}.json"
+    md_path = pending_dir / f"CCB待审批-{timestamp}-{safe_execution}.md"
+    safe_workflow_name = _markdown_table_cell(payload.workflowName or "未提供")
+    safe_execution_id = _markdown_table_cell(payload.executionId or safe_execution)
+    safe_srs = _markdown_table_cell(payload.latestSrs or "未提供")
+    safe_a5_report = _markdown_table_cell(payload.latestA5Report or "未提供")
+    safe_a5_decision = _markdown_table_cell(payload.a5Decision or "未提供")
+    safe_summary = _markdown_table_cell(payload.a5Summary or "未提供")
+    data = {
+        "createdAt": datetime.now().isoformat(timespec="seconds"),
+        "workflowName": payload.workflowName,
+        "executionId": payload.executionId,
+        "resumeUrl": payload.resumeUrl,
+        "latestSrs": payload.latestSrs,
+        "latestA5Report": payload.latestA5Report,
+        "a5Decision": payload.a5Decision,
+        "a5Summary": payload.a5Summary,
+        "allowedDecisions": ["approved", "approvedWithRisk", "rejected", "revise"],
+    }
+    json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    md_path.write_text(
+        "\n".join(
+            [
+                "# CCB 待审批",
+                "",
+                "| 字段 | 内容 |",
+                "|---|---|",
+                f"| 工作流 | {safe_workflow_name} |",
+                f"| 执行ID | {safe_execution_id} |",
+                f"| 最新 SRS | {safe_srs} |",
+                f"| A5 报告 | {safe_a5_report} |",
+                f"| A5 结论 | {safe_a5_decision} |",
+                f"| A5 摘要 | {safe_summary} |",
+                "",
+                "## 审批方式",
+                "",
+                "运行根目录 `一键CCB审批.bat`，脚本会读取同目录 JSON 中的运行时 resume URL 并提交审批。",
+                "",
+                "可选审批结论：",
+                "",
+                "- `approved`：通过，无保留意见。",
+                "- `approvedWithRisk`：带 A5 风险批准进入基线。",
+                "- `rejected`：审批不通过，终止本次工作流。",
+                "- `revise`：退回修改，本次工作流不创建基线。",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "pendingJson": str(json_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+        "pendingMarkdown": str(md_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+        "resumeUrlStored": "true",
+    }
 
 
 @app.get("/api/a2/notes")

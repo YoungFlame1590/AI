@@ -27,7 +27,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const body = $json.body ?? $json;\nconst stakeholders = body.stakeholders ?? [\n  { id: 'clerk', name: '门店店员' },\n  { id: 'manager', name: '门店店长' },\n  { id: 'operation', name: '总部运营管理员' },\n  { id: 'finance', name: '财务人员' },\n  { id: 'customer', name: '客户' },\n  { id: 'delivery', name: '配送/外协人员' },\n  { id: 'admin', name: '系统管理员' }\n];\nif (!body.apiKey) throw new Error('缺少 apiKey，请在启动 Webhook 请求体中传入百炼 API key。');\nreturn [{ json: {\n  projectName: body.projectName ?? '图文快印门店连锁管理系统',\n  apiKey: body.apiKey,\n  agentBaseUrl: (body.agentBaseUrl ?? 'http://127.0.0.1:8000').replace(/\\/$/, ''),\n  stakeholders,\n  roundsPerStakeholder: Number(body.roundsPerStakeholder ?? 1),\n  acceptA5Risks: Boolean(body.acceptA5Risks ?? false),\n  ccbConclusion: body.ccbConclusion ?? '通过（无保留意见）'\n}}];"
+        "jsCode": "const body = $json.body ?? $json;\nconst stakeholders = body.stakeholders ?? [\n  { id: 'clerk', name: '门店店员' },\n  { id: 'manager', name: '门店店长' },\n  { id: 'operation', name: '总部运营管理员' },\n  { id: 'finance', name: '财务人员' },\n  { id: 'customer', name: '客户' },\n  { id: 'delivery', name: '配送/外协人员' },\n  { id: 'admin', name: '系统管理员' }\n];\nif (!body.apiKey) throw new Error('缺少 apiKey，请在启动 Webhook 请求体中传入百炼 API key。');\nreturn [{ json: {\n  projectName: body.projectName ?? '图文快印门店连锁管理系统',\n  apiKey: body.apiKey,\n  agentBaseUrl: (() => { const url = body.agentBaseUrl ?? 'http://127.0.0.1:8000'; return url.endsWith('/') ? url.slice(0, -1) : url; })(),\n  stakeholders,\n  roundsPerStakeholder: Number(body.roundsPerStakeholder ?? 1),\n  maxA2RollbackRounds: Number(body.maxA2RollbackRounds ?? 1),\n  ccbConclusion: body.ccbConclusion ?? '通过（无保留意见）'\n}}];"
       }
     },
     {
@@ -44,11 +44,11 @@
         "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/n8n/a1b-batch",
         "sendBody": true,
         "contentType": "json",
+        "specifyBody": "json",
         "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey, stakeholders: $('准备执行参数').first().json.stakeholders, roundsPerStakeholder: $('准备执行参数').first().json.roundsPerStakeholder } }}",
         "options": {
           "timeout": 900000
-        },
-        "specifyBody": "json"
+        }
       }
     },
     {
@@ -62,14 +62,14 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a2/analyze",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/n8n/a2-analyze",
         "sendBody": true,
         "contentType": "json",
+        "specifyBody": "json",
         "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
         "options": {
           "timeout": 900000
-        },
-        "specifyBody": "json"
+        }
       }
     },
     {
@@ -78,7 +78,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
+        1400,
         0
       ],
       "parameters": {
@@ -86,11 +86,11 @@
         "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a3/model",
         "sendBody": true,
         "contentType": "json",
+        "specifyBody": "json",
         "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
         "options": {
           "timeout": 900000
-        },
-        "specifyBody": "json"
+        }
       }
     },
     {
@@ -99,7 +99,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1400,
+        1680,
         0
       ],
       "parameters": {
@@ -107,11 +107,11 @@
         "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a4/generate",
         "sendBody": true,
         "contentType": "json",
+        "specifyBody": "json",
         "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
         "options": {
           "timeout": 900000
-        },
-        "specifyBody": "json"
+        }
       }
     },
     {
@@ -120,7 +120,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1680,
+        1960,
         0
       ],
       "parameters": {
@@ -128,11 +128,99 @@
         "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a5/validate",
         "sendBody": true,
         "contentType": "json",
+        "specifyBody": "json",
         "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey } }}",
         "options": {
           "timeout": 900000
+        }
+      }
+    },
+    {
+      "id": "record-ccb",
+      "name": "记录CCB审批请求",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/n8n/ccb-pending",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const base = $execution.resumeUrl; const suffix = '/ccb-approval'; const i = base.indexOf('?'); const resumeUrl = i === -1 ? base + suffix : base.slice(0, i) + suffix + base.slice(i); return { resumeUrl, executionId: $execution.id, workflowName: '需求开发全流程（工作流1）', latestSrs: $('A4 SRS 生成').first().json.relativePath, latestA5Report: $('A5 需求验证').first().json.relativePath, a5Decision: $('A5 需求验证').first().json.decision, a5Summary: $('A5 需求验证').first().json.message || $('A5 需求验证').first().json.summary }; })() }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "ccb-wait",
+      "name": "CCB审批等待",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2520,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "responseData": "firstEntryJson",
+        "options": {
+          "webhookSuffix": "ccb-approval"
+        }
+      }
+    },
+    {
+      "id": "parse-ccb",
+      "name": "解析CCB决策",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst decision = body.decision ?? 'revise';\nconst comments = body.comments ?? '';\nconst acceptA5Risks = decision === 'approvedWithRisk' || body.acceptA5Risks === true;\nconst shouldCreateBaseline = decision === 'approved' || decision === 'approvedWithRisk';\nreturn [{ json: {\n  decision,\n  comments,\n  acceptA5Risks,\n  shouldCreateBaseline,\n  ccbConclusion: comments || (decision === 'approvedWithRisk' ? 'CCB 带风险批准' : 'CCB 审批通过')\n}}];"
+      }
+    },
+    {
+      "id": "if-create-baseline",
+      "name": "是否创建基线",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3080,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ccb-should-create",
+              "leftValue": "={{ $json.shouldCreateBaseline }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
         },
-        "specifyBody": "json"
+        "options": {}
       }
     },
     {
@@ -141,7 +229,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2820,
+        3360,
         -120
       ],
       "parameters": {
@@ -149,11 +237,11 @@
         "url": "={{ $('准备执行参数').first().json.agentBaseUrl }}/api/a6/create-baseline",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey, ccbConclusion: $('准备执行参数').first().json.ccbConclusion, acceptA5Risks: $('准备执行参数').first().json.acceptA5Risks } }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ { apiKey: $('准备执行参数').first().json.apiKey, ccbConclusion: $('解析CCB决策').first().json.ccbConclusion, acceptA5Risks: $('解析CCB决策').first().json.acceptA5Risks || $('A5 需求验证').first().json.decision === 'return_a1' || $('A5 需求验证').first().json.decision === 'return_a4' } }}",
         "options": {
           "timeout": 900000
-        },
-        "specifyBody": "json"
+        }
       }
     },
     {
@@ -162,11 +250,37 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3100,
+        3640,
         -120
       ],
       "parameters": {
         "jsCode": "const baseline = $json;\nreturn [{ json: {\n  status: 'completed',\n  message: '需求开发全流程完成，基线已创建。',\n  baselinePath: baseline.relativePath,\n  baselineId: baseline.baselineId,\n  requirementCount: baseline.requirementCount,\n  files: baseline.files\n}}];"
+      }
+    },
+    {
+      "id": "finish-no-baseline",
+      "name": "审批未通过或要求返修",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const ccb = $('解析CCB决策').first().json;\nreturn [{ json: {\n  status: ccb.decision === 'rejected' ? 'ccb_rejected' : 'ccb_revise_required',\n  message: ccb.decision === 'rejected' ? 'CCB 审批不通过，本次工作流终止。' : 'CCB 要求退回修改，本次工作流不创建基线。',\n  decision: ccb.decision,\n  comments: ccb.comments\n}}];"
+      }
+    },
+    {
+      "id": "a2-risk-summary",
+      "name": "A2风险提示",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const a2 = $json;\nreturn [{ json: {\n  status: a2.hasSevereIssues ? 'continue_with_a2_risks' : 'continue',\n  message: a2.hasSevereIssues ? 'A2 发现高/紧急风险，工作流继续进入 A3；这些问题将作为 A5/CCB 评审输入。' : 'A2 未发现高/紧急风险，继续进入 A3。',\n  a2RiskLevel: a2.a2RiskLevel ?? (a2.hasSevereIssues ? 'high' : 'normal'),\n  hasSevereIssues: Boolean(a2.hasSevereIssues),\n  issueCount: Array.isArray(a2.issues) ? a2.issues.length : 0,\n  severeIssueCount: Array.isArray(a2.rollbackIssues) ? a2.rollbackIssues.length : 0,\n  latestA2Report: a2.relativePath,\n  rollbackIssues: a2.rollbackIssues ?? []\n}}];"
       }
     }
   ],
@@ -208,6 +322,17 @@
       "main": [
         [
           {
+            "node": "A2风险提示",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2风险提示": {
+      "main": [
+        [
+          {
             "node": "A3 UML 建模",
             "type": "main",
             "index": 0
@@ -241,7 +366,58 @@
       "main": [
         [
           {
+            "node": "记录CCB审批请求",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "记录CCB审批请求": {
+      "main": [
+        [
+          {
+            "node": "CCB审批等待",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CCB审批等待": {
+      "main": [
+        [
+          {
+            "node": "解析CCB决策",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析CCB决策": {
+      "main": [
+        [
+          {
+            "node": "是否创建基线",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否创建基线": {
+      "main": [
+        [
+          {
             "node": "A6 创建需求基线",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "审批未通过或要求返修",
             "type": "main",
             "index": 0
           }
@@ -264,7 +440,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "workflow-1-print-chain-requirements",
+  "versionId": "workflow-1-print-chain-requirements-a2-risk-ccb",
   "meta": {
     "templateCredsSetupCompleted": true
   },

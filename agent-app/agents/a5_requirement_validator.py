@@ -236,12 +236,15 @@ def validate_requirements(llm) -> dict:
     )
     report = _clean_markdown(content)
     _validate_report(report)
+    status = _classify_report(report)
     path = _next_a5_report_path()
     path.write_text(report + "\n", encoding="utf-8")
     return {
         "relativePath": _relative(path),
         "path": str(path),
         "model": A5_MODEL,
+        "decision": status["decision"],
+        "message": status["message"],
         "content": report,
         "summary": f"A5 需求验证报告已生成：{_relative(path)}",
     }

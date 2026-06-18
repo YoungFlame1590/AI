@@ -83,12 +83,10 @@ if ([string]::IsNullOrWhiteSpace($apiKey)) {
     throw "API key is empty."
 }
 
-$riskAnswer = Read-Host "Accept A5 risks if CCB needs it? Type y or press Enter for no"
 $body = @{
     apiKey = $apiKey
     agentBaseUrl = "http://host.docker.internal:8000"
-    acceptA5Risks = ($riskAnswer -match "^(y|yes)$")
-    ccbConclusion = "Approved"
+    ccbConclusion = "待 CCB 审批"
 } | ConvertTo-Json -Compress
 
 Write-Host "Step 4 of 4: Triggering n8n workflow..."
@@ -116,3 +114,4 @@ catch {
 
 Write-Host ""
 Write-Host "Open n8n executions: http://localhost:5678"
+Write-Host "When the workflow reaches CCB, run: .\一键CCB审批.bat"
