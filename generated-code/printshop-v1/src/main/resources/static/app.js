@@ -1,32 +1,38 @@
 const state = {
   busy: false,
-  orderId: "ORD-DEMO-001",
-};
-
-const payloads = {
-  order: document.querySelector("#orderPayload"),
-  quotation: document.querySelector("#quotationPayload"),
-  production: document.querySelector("#productionPayload"),
-  delivery: document.querySelector("#deliveryPayload"),
-  invoice: document.querySelector("#invoicePayload"),
+  roles: [],
+  roleId: localStorage.getItem("printshop-role") || "customer",
+  snapshot: null,
+  selectedOrderId: "",
 };
 
 const els = {
+  roleSelect: document.querySelector("#roleSelect"),
+  currentUser: document.querySelector("#currentUser"),
+  roleFocus: document.querySelector("#roleFocus"),
   serviceStatus: document.querySelector("#serviceStatus"),
   totalRequests: document.querySelector("#totalRequests"),
   lastRequestAt: document.querySelector("#lastRequestAt"),
+  metrics: document.querySelector("#metrics"),
+  taskCount: document.querySelector("#taskCount"),
+  taskList: document.querySelector("#taskList"),
+  orderCount: document.querySelector("#orderCount"),
+  orderRows: document.querySelector("#orderRows"),
+  selectedOrder: document.querySelector("#selectedOrder"),
+  orderDetail: document.querySelector("#orderDetail"),
+  actionBar: document.querySelector("#actionBar"),
   moduleCounts: document.querySelector("#moduleCounts"),
-  latestResponse: document.querySelector("#latestResponse"),
-  requestLog: document.querySelector("#requestLog"),
   auditList: document.querySelector("#auditList"),
-  runWorkflow: document.querySelector("#runWorkflow"),
-  refreshStats: document.querySelector("#refreshStats"),
+  latestResponse: document.querySelector("#latestResponse"),
+  lastMessage: document.querySelector("#lastMessage"),
+  refreshWorkbench: document.querySelector("#refreshWorkbench"),
+  resetDemo: document.querySelector("#resetDemo"),
 };
 
 function setBusy(isBusy) {
   state.busy = isBusy;
-  document.querySelectorAll("button").forEach((button) => {
-    button.disabled = isBusy;
+  document.querySelectorAll("button, select").forEach((node) => {
+    node.disabled = isBusy;
   });
 }
 
@@ -34,55 +40,9 @@ function pretty(value) {
   return JSON.stringify(value, null, 2);
 }
 
-function writePayloads(orderId = state.orderId) {
-  state.orderId = orderId;
-  payloads.order.value = pretty({
-    orderId,
-    fileSizeMb: 10.5,
-    pageCount: 12,
-    paymentStatus: "1已付",
-    financialVerifyStatus: "0待核销",
-  });
-  payloads.quotation.value = pretty({
-    orderId,
-    discountRate: 0.95,
-    finalAmount: 180.0,
-  });
-  payloads.production.value = pretty({
-    orderId,
-    deviceSn: "DEVICE-01",
-    creditLimitUsed: 1200.0,
-  });
-  payloads.delivery.value = pretty({
-    orderId,
-    targetStoreId: "STORE-A",
-    financialVerifyStatus: "1已核销",
-    outsourcingCostRatio: 12.5,
-  });
-  payloads.invoice.value = pretty({
-    orderId,
-    amount: 180.0,
-    triggerMode: "交付后开",
-  });
-}
-
-function addLog(text, ok = true) {
-  const item = document.createElement("li");
-  item.className = ok ? "ok" : "warn";
-  item.textContent = `${new Date().toLocaleTimeString()} ${text}`;
-  els.requestLog.prepend(item);
-}
-
 function showResponse(value) {
   els.latestResponse.textContent = pretty(value);
-}
-
-function parsePayload(textarea) {
-  try {
-    return JSON.parse(textarea.value);
-  } catch (error) {
-    throw new Error(`JSON 格式错误：${error.message}`);
-  }
+  els.lastMessage.textContent = value?.message || "已更新";
 }
 
 async function requestJson(path, options = {}) {
@@ -101,16 +61,158 @@ async function requestJson(path, options = {}) {
   return data;
 }
 
-async function postJson(path, payload) {
-  return requestJson(path, {
-    method: "POST",
-    body: JSON.stringify(payload),
+async function loadRoles() {
+  state.roles = await requestJson("/api/v1/roles", { method: "GET" });
+  if (!state.roles.some((role) => role.roleId === state.roleId)) {
+    state.roleId = state.roles[0]?.roleId || "customer";
+  }
+  els.roleSelect.innerHTML = "";
+  for (const role of state.roles) {
+    const option = document.createElement("option");
+    option.value = role.roleId;
+    option.textContent = role.roleName;
+    option.selected = role.roleId === state.roleId;
+    els.roleSelect.appendChild(option);
+  }
+}
+
+async function loadWorkbench() {
+  state.snapshot = await requestJson(`/api/v1/workbench/${state.roleId}`, { method: "GET" });
+  const orders = state.snapshot.orders || [];
+  if (!orders.some((order) => order.orderId === state.selectedOrderId)) {
+    state.selectedOrderId = orders[0]?.orderId || "";
+  }
+  render();
+  showResponse({
+    message: state.snapshot.message,
+    role: state.snapshot.role?.roleName,
+    selectedOrder: state.selectedOrderId,
   });
 }
 
-function renderStats(stats) {
+function render() {
+  renderHeader();
+  renderMetrics();
+  renderTasks();
+  renderOrders();
+  renderDetail();
+  renderActions();
+  renderStats();
+  renderAudits();
+}
+
+function renderHeader() {
+  const role = state.snapshot?.role;
+  els.currentUser.textContent = role ? `${role.userName} · ${role.userId}` : "-";
+  els.roleFocus.textContent = role?.focus || "-";
   els.serviceStatus.textContent = "运行中";
   els.serviceStatus.className = "ok";
+}
+
+function renderMetrics() {
+  els.metrics.innerHTML = "";
+  for (const metric of state.snapshot?.metrics || []) {
+    const card = document.createElement("article");
+    card.className = `metric-card ${metric.tone || "normal"}`;
+    card.innerHTML = `<span>${metric.label}</span><strong>${metric.value}</strong>`;
+    els.metrics.appendChild(card);
+  }
+}
+
+function renderTasks() {
+  const tasks = state.snapshot?.tasks || [];
+  els.taskCount.textContent = String(tasks.length);
+  els.taskList.innerHTML = "";
+  if (tasks.length === 0) {
+    els.taskList.textContent = "当前角色暂无待办";
+    return;
+  }
+  for (const task of tasks) {
+    const item = document.createElement("article");
+    item.className = `task-item ${task.severity === "高" ? "hot" : ""}`;
+    item.innerHTML = `
+      <div>
+        <strong>${task.title}</strong>
+        <span>${task.orderId || "全局任务"} · ${task.dueText}</span>
+      </div>
+      <button type="button" data-action="${task.actionId}" data-order="${task.orderId || ""}">处理</button>
+    `;
+    els.taskList.appendChild(item);
+  }
+}
+
+function renderOrders() {
+  const orders = state.snapshot?.orders || [];
+  els.orderCount.textContent = String(orders.length);
+  els.orderRows.innerHTML = "";
+  if (orders.length === 0) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="5">当前角色暂无可见订单</td>`;
+    els.orderRows.appendChild(row);
+    return;
+  }
+  for (const order of orders) {
+    const row = document.createElement("tr");
+    row.className = order.orderId === state.selectedOrderId ? "selected" : "";
+    row.dataset.order = order.orderId;
+    row.innerHTML = `
+      <td><strong>${order.orderId}</strong><span>${order.storeName}</span></td>
+      <td>${order.customerName}</td>
+      <td><span class="status-pill">${order.status}</span></td>
+      <td>¥${Number(order.amount || 0).toFixed(2)}</td>
+      <td>${(order.tags || []).map((tag) => `<span class="tag">${tag}</span>`).join("")}</td>
+    `;
+    els.orderRows.appendChild(row);
+  }
+}
+
+function renderDetail() {
+  const order = selectedOrder();
+  els.selectedOrder.textContent = order ? order.orderId : "未选择";
+  if (!order) {
+    els.orderDetail.textContent = "请选择一笔订单";
+    return;
+  }
+  const fields = [
+    ["客户", order.customerName],
+    ["门店", order.storeName],
+    ["主状态", order.status],
+    ["报价", order.quoteStatus],
+    ["排产", order.productionStatus],
+    ["配送", order.deliveryStatus],
+    ["发票", order.invoiceStatus],
+    ["财务", order.financeStatus],
+    ["优先级", order.priority],
+    ["当前步骤", order.currentStep],
+  ];
+  els.orderDetail.innerHTML = fields.map(([label, value]) => `
+    <div>
+      <span>${label}</span>
+      <strong>${value || "-"}</strong>
+    </div>
+  `).join("");
+}
+
+function renderActions() {
+  els.actionBar.innerHTML = "";
+  for (const action of state.snapshot?.actions || []) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.action = action.actionId;
+    button.dataset.order = action.orderRequired ? state.selectedOrderId : "";
+    button.textContent = action.label;
+    if (action.orderRequired && !state.selectedOrderId) {
+      button.disabled = true;
+    }
+    if (!action.orderRequired) {
+      button.className = "secondary";
+    }
+    els.actionBar.appendChild(button);
+  }
+}
+
+function renderStats() {
+  const stats = state.snapshot?.stats || {};
   els.totalRequests.textContent = stats.totalRequests ?? 0;
   els.lastRequestAt.textContent = stats.lastRequestAt ? new Date(stats.lastRequestAt).toLocaleString() : "-";
   const modules = ["ORD", "QUO", "PRO", "DLV", "FIN", "AUD"];
@@ -123,116 +225,147 @@ function renderStats(stats) {
   }
 }
 
-async function refreshStats() {
-  try {
-    const stats = await requestJson("/stats", { method: "GET" });
-    renderStats(stats);
-    return stats;
-  } catch (error) {
-    els.serviceStatus.textContent = "异常";
-    els.serviceStatus.className = "warn";
-    addLog(`stats 读取失败：${error.message}`, false);
-    throw error;
-  }
-}
-
-function renderAuditLogs(logs) {
-  if (!Array.isArray(logs) || logs.length === 0) {
+function renderAudits() {
+  const audits = state.snapshot?.audits || [];
+  if (audits.length === 0) {
     els.auditList.textContent = "暂无审计日志";
     return;
   }
   els.auditList.innerHTML = "";
-  for (const item of logs.slice().reverse()) {
-    const node = document.createElement("div");
+  for (const item of audits) {
+    const node = document.createElement("article");
     node.className = "audit-item";
-    node.textContent = `${item.timestamp || "-"} · ${item.action || "-"} · ${item.operatorId || "-"}`;
+    node.innerHTML = `
+      <strong>${item.action || "-"}</strong>
+      <span>${item.operatorId || "-"} · ${formatTime(item.timestamp)}</span>
+      <p>${item.snapshot || ""}</p>
+    `;
     els.auditList.appendChild(node);
   }
 }
 
-async function runAction(action) {
-  const routes = {
-    order: ["/api/v1/orders", payloads.order],
-    quotation: ["/api/v1/quotations/calculate", payloads.quotation],
-    production: ["/api/v1/productions/dispatch", payloads.production],
-    delivery: ["/api/v1/deliveries/route", payloads.delivery],
-    invoice: ["/api/v1/invoices/issue", payloads.invoice],
-  };
-  if (action === "audit") {
-    const logs = await requestJson("/api/v1/audit-logs", { method: "GET" });
-    renderAuditLogs(logs);
-    showResponse(logs);
-    addLog("GET /api/v1/audit-logs 成功");
-    await refreshStats();
-    return logs;
-  }
-  const [path, textarea] = routes[action];
-  const data = await postJson(path, parsePayload(textarea));
-  showResponse(data);
-  addLog(`${path} 成功`);
-  await refreshStats();
-  return data;
+function selectedOrder() {
+  return (state.snapshot?.orders || []).find((order) => order.orderId === state.selectedOrderId);
 }
 
-async function handleAction(action) {
-  if (state.busy) return;
-  setBusy(true);
-  try {
-    await runAction(action);
-  } catch (error) {
-    addLog(error.message, false);
-    showResponse({ error: error.message });
-  } finally {
-    setBusy(false);
-  }
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-async function runWorkflow() {
-  if (state.busy) return;
-  const orderId = `ORD-DEMO-${Date.now().toString().slice(-6)}`;
-  writePayloads(orderId);
+async function runAction(actionId, orderId) {
   setBusy(true);
   try {
-    addLog(`开始演示完整流程：${orderId}`);
-    await runAction("order");
-    await runAction("quotation");
-    await runAction("production");
-    await runAction("delivery");
-    await runAction("invoice");
-    await runAction("audit");
-    const stats = await refreshStats();
-    showResponse({
-      message: "完整流程演示完成",
-      orderId,
-      stats,
+    const payload = {};
+    const order = selectedOrder();
+    if (actionId === "clerk_quote_order" && order) {
+      payload.amount = order.amount;
+    }
+    const snapshot = await requestJson("/api/v1/workbench/actions", {
+      method: "POST",
+      body: JSON.stringify({
+        roleId: state.roleId,
+        action: actionId,
+        orderId: orderId || "",
+        payload,
+      }),
     });
-    addLog("完整流程演示完成");
+    state.snapshot = snapshot;
+    const orders = snapshot.orders || [];
+    if (!orders.some((item) => item.orderId === state.selectedOrderId)) {
+      state.selectedOrderId = orders[0]?.orderId || "";
+    }
+    render();
+    showResponse({
+      message: snapshot.message,
+      role: snapshot.role?.roleName,
+      selectedOrder: state.selectedOrderId,
+    });
   } catch (error) {
-    addLog(`完整流程中断：${error.message}`, false);
-    showResponse({ error: error.message });
+    showError(error);
   } finally {
     setBusy(false);
   }
 }
 
-document.querySelectorAll("[data-run]").forEach((button) => {
-  button.addEventListener("click", () => handleAction(button.dataset.run));
-});
-
-els.runWorkflow.addEventListener("click", runWorkflow);
-els.refreshStats.addEventListener("click", async () => {
-  if (state.busy) return;
+async function resetDemo() {
   setBusy(true);
   try {
-    const stats = await refreshStats();
-    showResponse(stats);
-    addLog("GET /stats 成功");
+    state.snapshot = await requestJson(`/api/v1/workbench/reset?roleId=${encodeURIComponent(state.roleId)}`, {
+      method: "POST",
+    });
+    state.selectedOrderId = state.snapshot.orders?.[0]?.orderId || "";
+    render();
+    showResponse({ message: state.snapshot.message, role: state.snapshot.role?.roleName });
   } catch (error) {
-    showResponse({ error: error.message });
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function showError(error) {
+  els.serviceStatus.textContent = "异常";
+  els.serviceStatus.className = "warn";
+  showResponse({ error: error.message });
+}
+
+els.roleSelect.addEventListener("change", async () => {
+  state.roleId = els.roleSelect.value;
+  localStorage.setItem("printshop-role", state.roleId);
+  state.selectedOrderId = "";
+  setBusy(true);
+  try {
+    await loadWorkbench();
+  } catch (error) {
+    showError(error);
   } finally {
     setBusy(false);
   }
 });
 
-writePayloads();
-refreshStats().catch(() => {});
+els.refreshWorkbench.addEventListener("click", async () => {
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    await loadWorkbench();
+  } catch (error) {
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.resetDemo.addEventListener("click", () => {
+  if (!state.busy) resetDemo();
+});
+
+document.body.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-action]");
+  if (actionButton && !state.busy) {
+    runAction(actionButton.dataset.action, actionButton.dataset.order || state.selectedOrderId);
+    return;
+  }
+  const row = event.target.closest("tr[data-order]");
+  if (row && !state.busy) {
+    state.selectedOrderId = row.dataset.order;
+    renderOrders();
+    renderDetail();
+    renderActions();
+  }
+});
+
+async function init() {
+  setBusy(true);
+  try {
+    await loadRoles();
+    await loadWorkbench();
+  } catch (error) {
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+init();

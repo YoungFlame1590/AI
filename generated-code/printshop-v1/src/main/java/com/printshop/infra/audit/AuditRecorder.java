@@ -16,7 +16,11 @@ public class AuditRecorder {
     private final CopyOnWriteArrayList<AuditRecord> records = new CopyOnWriteArrayList<>();
 
     public void record(String action, String snapshot) {
-        records.add(new AuditRecord(UUID.randomUUID().toString(), "system", action, snapshot, Instant.now()));
+        record("system", action, snapshot);
+    }
+
+    public void record(String operatorId, String action, String snapshot) {
+        records.add(new AuditRecord(UUID.randomUUID().toString(), operatorId, action, snapshot, Instant.now()));
     }
 
     public List<AuditRecord> findAll() {
