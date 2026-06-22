@@ -67,6 +67,34 @@ obsidian-vault/     Obsidian 知识库与课程设计资产
 
 第二步只生成设计资产，不生成业务代码，也不接入 n8n 工作流。
 
+## v1 Spring Boot 业务工程
+
+课程 STEP 12 的 v1 代码生成产物位于：
+
+```text
+generated-code/printshop-v1/
+```
+
+该工程是独立的 Spring Boot 3 + Java 17 模块化单体演示版，实现 OpenAPI 契约中的 6 个核心接口，并提供 `/stats` 内存统计接口。
+
+运行：
+
+```powershell
+cd generated-code\printshop-v1
+mvn spring-boot:run
+```
+
+验证：
+
+```powershell
+mvn test
+mvn package
+```
+
+默认地址：`http://127.0.0.1:8080`。
+
+前端演示台：`http://127.0.0.1:8080/`。页面可单独调用 6 个业务接口，也可一键执行 `ORD → QUO → PRO → DLV → FIN → AUD → stats` 演示链路。
+
 ## n8n 工作流
 
 本仓库提供可导入 n8n 的需求开发全流程工作流：

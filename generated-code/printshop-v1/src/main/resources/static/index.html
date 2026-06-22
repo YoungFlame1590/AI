@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>图文快印门店连锁管理系统 v1</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>图文快印门店连锁管理系统 v1</h1>
+          <p>Spring Boot 课程演示台 · OpenAPI 契约驱动 · 内存数据</p>
+        </div>
+        <nav class="top-actions" aria-label="快捷入口">
+          <a href="/swagger-ui/index.html" target="_blank" rel="noreferrer">Swagger</a>
+          <button id="refreshStats" type="button">刷新统计</button>
+          <button id="runWorkflow" class="primary" type="button">一键演示完整流程</button>
+        </nav>
+      </header>
+
+      <section class="status-strip" aria-label="运行状态">
+        <div>
+          <span class="label">服务状态</span>
+          <strong id="serviceStatus">检测中</strong>
+        </div>
+        <div>
+          <span class="label">总请求数</span>
+          <strong id="totalRequests">0</strong>
+        </div>
+        <div>
+          <span class="label">最后调用</span>
+          <strong id="lastRequestAt">-</strong>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="sidebar" aria-label="流程导航">
+          <h2>业务链路</h2>
+          <ol class="flow-list">
+            <li>ORD 接单</li>
+            <li>QUO 报价</li>
+            <li>PRO 排产</li>
+            <li>DLV 配送</li>
+            <li>FIN 开票</li>
+            <li>AUD 审计</li>
+          </ol>
+          <div class="module-grid" id="moduleCounts"></div>
+        </aside>
+
+        <section class="workbench" aria-label="接口操作区">
+          <article class="panel" data-endpoint="/api/v1/orders" data-method="POST">
+            <div class="panel-head">
+              <h2>ORD 订单接单</h2>
+              <button type="button" data-run="order">提交</button>
+            </div>
+            <textarea id="orderPayload" spellcheck="false"></textarea>
+          </article>
+
+          <article class="panel" data-endpoint="/api/v1/quotations/calculate" data-method="POST">
+            <div class="panel-head">
+              <h2>QUO 报价计算</h2>
+              <button type="button" data-run="quotation">提交</button>
+            </div>
+            <textarea id="quotationPayload" spellcheck="false"></textarea>
+          </article>
+
+          <article class="panel" data-endpoint="/api/v1/productions/dispatch" data-method="POST">
+            <div class="panel-head">
+              <h2>PRO 排产下发</h2>
+              <button type="button" data-run="production">提交</button>
+            </div>
+            <textarea id="productionPayload" spellcheck="false"></textarea>
+          </article>
+
+          <article class="panel" data-endpoint="/api/v1/deliveries/route" data-method="POST">
+            <div class="panel-head">
+              <h2>DLV 配送路由</h2>
+              <button type="button" data-run="delivery">提交</button>
+            </div>
+            <textarea id="deliveryPayload" spellcheck="false"></textarea>
+          </article>
+
+          <article class="panel" data-endpoint="/api/v1/invoices/issue" data-method="POST">
+            <div class="panel-head">
+              <h2>FIN 发票开具</h2>
+              <button type="button" data-run="invoice">提交</button>
+            </div>
+            <textarea id="invoicePayload" spellcheck="false"></textarea>
+          </article>
+
+          <article class="panel audit-panel">
+            <div class="panel-head">
+              <h2>AUD 审计日志</h2>
+              <button type="button" data-run="audit">查询</button>
+            </div>
+            <div id="auditList" class="audit-list">暂无审计日志</div>
+          </article>
+        </section>
+
+        <aside class="inspector" aria-label="响应与日志">
+          <section>
+            <h2>最近响应</h2>
+            <pre id="latestResponse">{}</pre>
+          </section>
+          <section>
+            <h2>请求日志</h2>
+            <ul id="requestLog"></ul>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

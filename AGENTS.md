@@ -15,6 +15,10 @@ This repository has two main work areas:
   - `wiki/baselines/`: approved A6 baseline snapshots named `BL-YYYYMMDD-NN`.
   - `templates/`: reusable Markdown templates.
   - `compile.js`: vault integrity checker.
+- `generated-code/printshop-v1/`: generated Java 17 + Spring Boot 3 v1 business application.
+  - `infra/`: audit, stats, state machine, and external adapter placeholders.
+  - module packages such as `ord`, `quo`, `pro`, `dlv`, `fin`, and `aud`: DTOs, in-memory repositories, application services, and controllers.
+  - `src/main/resources/static/`: no-build frontend demo console served by Spring Boot at `/`.
 
 Root-level `启动需求获取页面.bat` is the main local launcher.
 Root-level `启动n8n-Docker.bat`, `一键启动n8n工作流.bat`, and `一键CCB审批.bat` support the n8n workflow.
@@ -45,6 +49,23 @@ Validate frontend JavaScript:
 ```powershell
 node --check agent-app\web\app.js
 ```
+
+Build and test the generated v1 business app:
+
+```powershell
+cd generated-code\printshop-v1
+mvn test
+mvn package
+```
+
+Run the generated v1 app and open its frontend:
+
+```powershell
+cd generated-code\printshop-v1
+mvn spring-boot:run
+```
+
+Then visit `http://127.0.0.1:8080/`.
 
 Start manually if needed:
 
@@ -83,7 +104,7 @@ node --check agent-app\web\app.js
 cd obsidian-vault; node compile.js
 ```
 
-For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`; design-stage constraints write `设计约束/TLCD-三层约束文档-vX.Y.md`, `API契约/OpenAPI-接口契约-vX.Y.yaml`, and `设计约束/约束提示词-vX.Y.md`.
+For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`; design-stage constraints write `设计约束/TLCD-三层约束文档-vX.Y.md`, `API契约/OpenAPI-接口契约-vX.Y.yaml`, and `设计约束/约束提示词-vX.Y.md`; v1 code generation writes `generated-code/printshop-v1/` and `wiki/summaries/代码生成/v1代码生成说明.md`.
 
 A2 is advisory in n8n workflow 1: severe issues become an `A2风险提示` node output and do not automatically call A1 rollback. Manual rollback remains available through the web UI or `/api/n8n/a2-rollback`.
 

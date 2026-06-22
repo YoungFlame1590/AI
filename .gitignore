@@ -8,5 +8,6 @@ __pycache__/
 .pytest_cache/
 **/.pytest_cache/
 *.log
+**/target/
 raw/notes/*.tmp
 obsidian-vault/raw/notes/*.tmp
