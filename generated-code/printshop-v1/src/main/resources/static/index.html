@@ -3,115 +3,91 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>图文快印门店连锁管理系统 v1</title>
+    <title>图文快印 Print MIS</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <h1>图文快印门店连锁管理系统 v1</h1>
-          <p>七类涉众角色工作台 · Spring Boot 内存演示版</p>
-        </div>
-        <div class="role-switcher">
-          <label for="roleSelect">当前角色</label>
-          <select id="roleSelect" aria-label="选择当前角色"></select>
-          <strong id="currentUser">-</strong>
-        </div>
-        <nav class="top-actions" aria-label="快捷入口">
-          <a href="/swagger-ui/index.html" target="_blank" rel="noreferrer">Swagger</a>
-          <button id="refreshWorkbench" type="button">刷新</button>
-          <button id="resetDemo" type="button">重置数据</button>
-        </nav>
-      </header>
-
-      <section class="status-strip" aria-label="运行状态">
-        <div>
-          <span class="label">服务状态</span>
-          <strong id="serviceStatus">检测中</strong>
-        </div>
-        <div>
-          <span class="label">总请求数</span>
-          <strong id="totalRequests">0</strong>
-        </div>
-        <div>
-          <span class="label">最后调用</span>
-          <strong id="lastRequestAt">-</strong>
-        </div>
-        <div>
-          <span class="label">当前关注</span>
-          <strong id="roleFocus">-</strong>
-        </div>
+      <section id="loginView" class="login-view">
+        <form id="loginForm" class="login-card">
+          <h1>图文快印 Print MIS</h1>
+          <p>订单、报价、作业单、生产、库存、配送、财务与审计一体化</p>
+          <label>
+            账号
+            <input id="username" value="admin" autocomplete="username" />
+          </label>
+          <label>
+            密码
+            <input id="password" value="demo123" type="password" autocomplete="current-password" />
+          </label>
+          <button type="submit">登录系统</button>
+          <small>演示账号：customer / clerk / manager / ops / finance / courier / admin，密码均为 demo123</small>
+        </form>
       </section>
 
-      <section class="metric-grid" id="metrics" aria-label="角色指标"></section>
-
-      <section class="layout">
-        <aside class="sidebar" aria-label="角色待办">
-          <div class="section-head">
-            <h2>角色待办</h2>
-            <span id="taskCount">0</span>
+      <section id="appView" class="main-view hidden">
+        <aside class="nav">
+          <div class="brand">
+            <strong>Print MIS</strong>
+            <span>图文快印连锁</span>
           </div>
-          <div id="taskList" class="task-list"></div>
+          <button data-module="dashboard" class="active">工作台</button>
+          <button data-module="orders">订单</button>
+          <button data-module="quotations">报价</button>
+          <button data-module="jobTickets">作业单</button>
+          <button data-module="productionTasks">生产排程</button>
+          <button data-module="inventoryItems">库存</button>
+          <button data-module="deliveryTasks">配送/外协</button>
+          <button data-module="invoices">发票</button>
+          <button data-module="payments">收款/退款</button>
+          <button data-module="audits">审计</button>
+          <button data-module="reports">报表</button>
         </aside>
 
-        <section class="workbench" aria-label="角色工作区">
-          <article class="panel order-panel">
-            <div class="section-head">
-              <h2>订单队列</h2>
-              <span id="orderCount">0</span>
+        <section class="content">
+          <header class="topbar">
+            <div>
+              <h1 id="pageTitle">工作台</h1>
+              <p id="pageSubTitle">准生产版 Print MIS</p>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>订单</th>
-                    <th>客户</th>
-                    <th>状态</th>
-                    <th>金额</th>
-                    <th>标签</th>
-                  </tr>
-                </thead>
-                <tbody id="orderRows"></tbody>
-              </table>
+            <div class="user-box">
+              <span id="currentUser">未登录</span>
+              <button id="logoutBtn" type="button">退出</button>
             </div>
-          </article>
+          </header>
 
-          <article class="panel detail-panel">
-            <div class="section-head">
-              <h2>订单详情与动作</h2>
-              <span id="selectedOrder">未选择</span>
-            </div>
-            <div id="orderDetail" class="detail-grid"></div>
-            <div class="action-bar" id="actionBar"></div>
-          </article>
-        </section>
+          <section id="metrics" class="metrics"></section>
 
-        <aside class="inspector" aria-label="审计与统计">
-          <section class="panel">
-            <div class="section-head">
-              <h2>模块统计</h2>
-              <span>/stats</span>
-            </div>
-            <div class="module-grid" id="moduleCounts"></div>
+          <section class="workspace">
+            <article class="panel table-panel">
+              <div class="panel-head">
+                <h2 id="tableTitle">数据列表</h2>
+                <div class="actions">
+                  <button id="newBtn" type="button">新增</button>
+                  <button id="refreshBtn" type="button">刷新</button>
+                </div>
+              </div>
+              <div id="tableWrap" class="table-wrap"></div>
+            </article>
+
+            <article class="panel detail-panel">
+              <div class="panel-head">
+                <h2 id="detailTitle">详情</h2>
+                <div id="recordActions" class="actions"></div>
+              </div>
+              <form id="recordForm" class="record-form"></form>
+              <section id="timeline" class="timeline"></section>
+            </article>
           </section>
 
-          <section class="panel">
-            <div class="section-head">
-              <h2>审计日志</h2>
-              <span>最近 8 条</span>
-            </div>
-            <div id="auditList" class="audit-list">暂无审计日志</div>
-          </section>
-
-          <section class="panel">
-            <div class="section-head">
-              <h2>最近结果</h2>
+          <section class="panel response-panel">
+            <div class="panel-head">
+              <h2>最近响应</h2>
               <span id="lastMessage">-</span>
             </div>
-            <pre id="latestResponse">{}</pre>
+            <pre id="responseBox">{}</pre>
           </section>
-        </aside>
+        </section>
       </section>
     </main>
 

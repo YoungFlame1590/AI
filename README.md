@@ -75,13 +75,28 @@ obsidian-vault/     Obsidian 知识库与课程设计资产
 generated-code/printshop-v1/
 ```
 
-该工程是独立的 Spring Boot 3 + Java 17 模块化单体演示版，实现 OpenAPI 契约中的 6 个核心接口，提供 `/stats` 内存统计接口，并包含七类涉众角色工作台。
+该工程是独立的 Spring Boot 3 + Java 17 准生产版 Print MIS 模块化单体，使用 MySQL 8、Spring Data JPA、Flyway 和 Spring Security，实现登录、订单、文件、报价、作业单、生产、库存、配送、发票、收款、审计、报表和 `/stats`。
 
-运行：
+启动数据库：
+
+```powershell
+cd generated-code\printshop-v1
+docker compose up -d mysql
+```
+
+MySQL 默认映射到 `127.0.0.1:13306`，避免和本机已有的 `3306` MySQL 冲突。
+
+启动系统：
 
 ```powershell
 cd generated-code\printshop-v1
 mvn spring-boot:run
+```
+
+如果 Docker 镜像拉取失败，可先用本地 H2 演示 profile：
+
+```powershell
+mvn spring-boot:run -Dspring-boot.run.profiles=demo
 ```
 
 验证：
@@ -93,7 +108,7 @@ mvn package
 
 默认地址：`http://127.0.0.1:8080`。
 
-角色业务工作台：`http://127.0.0.1:8080/`。页面可切换客户、门店店员、门店店长、总部运营管理员、财务人员、配送/外协人员、系统管理员，执行各自的订单、报价、审批、排产、配送、开票、审计等演示动作。
+页面入口：`http://127.0.0.1:8080/`。默认账号为 `customer/clerk/manager/ops/finance/courier/admin`，密码均为 `demo123`。登录后可进入面向角色的业务系统，使用左侧模块导航完成订单接单、文件上传、报价审批、作业单、排产、库存、配送、收款开票、审计和报表操作。审计日志保持只读查询。
 
 设计漂移检测：
 

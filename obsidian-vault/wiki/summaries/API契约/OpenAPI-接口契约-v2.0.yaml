@@ -1,0 +1,989 @@
+openapi: 3.0.3
+info:
+  title: 图文快印门店连锁管理系统 Print MIS API
+  version: 2.0.0
+  description: 准生产版 v1 Spring Boot 工程接口契约，覆盖身份、订单、文件、报价、作业单、生产、库存、配送、发票、收款、审计和报表。
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - basicAuth: []
+tags:
+  - name: Auth
+  - name: Dashboard
+  - name: Store
+  - name: Order
+  - name: File
+  - name: Quotation
+  - name: JobTicket
+  - name: Production
+  - name: Inventory
+  - name: Delivery
+  - name: Finance
+  - name: Audit
+  - name: Report
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: 登录并返回 Basic Auth token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/me:
+    get:
+      tags: [Dashboard]
+      summary: 当前用户信息
+      responses:
+        '200':
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/me/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: 当前角色工作台数据
+      responses:
+        '200':
+          description: 指标、最近订单、生产看板、库存预警和审计摘要
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/stores:
+    get:
+      tags: [Store]
+      summary: 门店列表
+      responses:
+        '200':
+          description: 门店列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/users:
+    get:
+      tags: [Auth]
+      summary: 用户列表
+      responses:
+        '200':
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/orders:
+    get:
+      tags: [Order]
+      summary: 订单列表
+      responses:
+        '200':
+          description: 按当前角色过滤的订单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Order]
+      summary: 创建订单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrintOrder'
+      responses:
+        '200':
+          description: 创建后的订单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/orders/{id}:
+    get:
+      tags: [Order]
+      summary: 订单详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 订单详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Order]
+      summary: 更新订单
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrintOrder'
+      responses:
+        '200':
+          description: 更新后的订单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Order]
+      summary: 删除订单
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除订单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/orders/{id}/status:
+    post:
+      tags: [Order]
+      summary: 流转订单状态
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusChange'
+      responses:
+        '200':
+          description: 更新后的订单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/orders/{id}/files:
+    get:
+      tags: [File]
+      summary: 订单文件列表
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 文件列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [File]
+      summary: 上传订单文件
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 文件元数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/quotations:
+    get:
+      tags: [Quotation]
+      summary: 报价列表
+      responses:
+        '200':
+          description: 报价列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Quotation]
+      summary: 创建报价
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+      responses:
+        '200':
+          description: 创建后的报价
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/quotations/{id}:
+    get:
+      tags: [Quotation]
+      summary: 报价详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 报价详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Quotation]
+      summary: 更新报价
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+      responses:
+        '200':
+          description: 更新后的报价
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Quotation]
+      summary: 删除报价
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除报价
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/quotations/{id}/approve:
+    post:
+      tags: [Quotation]
+      summary: 审批报价折扣
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 审批后的报价
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/job-tickets:
+    get:
+      tags: [JobTicket]
+      summary: 作业单列表
+      responses:
+        '200':
+          description: 作业单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [JobTicket]
+      summary: 创建作业单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobTicket'
+      responses:
+        '200':
+          description: 创建后的作业单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/job-tickets/{id}:
+    get:
+      tags: [JobTicket]
+      summary: 作业单详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 作业单详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [JobTicket]
+      summary: 更新作业单
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobTicket'
+      responses:
+        '200':
+          description: 更新后的作业单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [JobTicket]
+      summary: 删除作业单
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除作业单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/production-tasks:
+    get:
+      tags: [Production]
+      summary: 生产任务列表
+      responses:
+        '200':
+          description: 生产任务列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Production]
+      summary: 创建生产任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionTask'
+      responses:
+        '200':
+          description: 创建后的生产任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/production-tasks/{id}:
+    get:
+      tags: [Production]
+      summary: 生产任务详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 生产任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Production]
+      summary: 更新生产任务
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionTask'
+      responses:
+        '200':
+          description: 更新后的生产任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Production]
+      summary: 删除生产任务
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除生产任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/production-tasks/{id}/complete:
+    post:
+      tags: [Production]
+      summary: 生产完工并质检通过
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 更新后的生产任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/inventory-items:
+    get:
+      tags: [Inventory]
+      summary: 库存物料列表
+      responses:
+        '200':
+          description: 库存列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Inventory]
+      summary: 创建库存物料
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryItem'
+      responses:
+        '200':
+          description: 创建后的库存物料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/inventory-items/{id}:
+    get:
+      tags: [Inventory]
+      summary: 库存物料详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 库存详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Inventory]
+      summary: 更新库存物料
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryItem'
+      responses:
+        '200':
+          description: 更新后的库存物料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Inventory]
+      summary: 删除库存物料
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除库存物料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/inventory-items/{id}/adjust:
+    post:
+      tags: [Inventory]
+      summary: 库存调整
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryAdjust'
+      responses:
+        '200':
+          description: 调整后的库存物料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/delivery-tasks:
+    get:
+      tags: [Delivery]
+      summary: 配送/外协任务列表
+      responses:
+        '200':
+          description: 配送任务列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Delivery]
+      summary: 创建配送/外协任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryTask'
+      responses:
+        '200':
+          description: 创建后的配送任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/delivery-tasks/{id}:
+    get:
+      tags: [Delivery]
+      summary: 配送任务详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 配送任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Delivery]
+      summary: 更新配送任务
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryTask'
+      responses:
+        '200':
+          description: 更新后的配送任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Delivery]
+      summary: 删除配送任务
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除配送任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/delivery-tasks/{id}/sign:
+    post:
+      tags: [Delivery]
+      summary: 签收配送任务
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signedBy:
+                  type: string
+      responses:
+        '200':
+          description: 签收后的配送任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/invoices:
+    get:
+      tags: [Finance]
+      summary: 发票列表
+      responses:
+        '200':
+          description: 发票列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Finance]
+      summary: 创建发票申请
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceRecord'
+      responses:
+        '200':
+          description: 创建后的发票
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/invoices/{id}:
+    get:
+      tags: [Finance]
+      summary: 发票详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 发票详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Finance]
+      summary: 更新发票
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceRecord'
+      responses:
+        '200':
+          description: 更新后的发票
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Finance]
+      summary: 删除发票
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除发票
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/invoices/{id}/issue:
+    post:
+      tags: [Finance]
+      summary: 开具发票
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已开具发票
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/payments:
+    get:
+      tags: [Finance]
+      summary: 收款/退款列表
+      responses:
+        '200':
+          description: 付款记录列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Finance]
+      summary: 新增收款
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRecord'
+      responses:
+        '200':
+          description: 创建后的付款记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/payments/{id}:
+    get:
+      tags: [Finance]
+      summary: 付款详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 付款详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    put:
+      tags: [Finance]
+      summary: 更新付款记录
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRecord'
+      responses:
+        '200':
+          description: 更新后的付款记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+    delete:
+      tags: [Finance]
+      summary: 删除付款记录
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已删除付款记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/payments/{id}/refund:
+    post:
+      tags: [Finance]
+      summary: 退款
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已退款付款记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/audit-logs:
+    get:
+      tags: [Audit]
+      summary: 审计日志列表
+      responses:
+        '200':
+          description: 审计日志列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/audit-logs/{id}:
+    get:
+      tags: [Audit]
+      summary: 审计日志详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 审计日志详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/reports:
+    get:
+      tags: [Report]
+      summary: 经营报表
+      responses:
+        '200':
+          description: 订单漏斗、生产负载、低库存与财务摘要
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /stats:
+    get:
+      tags: [Report]
+      summary: 模块调用统计
+      responses:
+        '200':
+          description: 运行期调用统计
+          content:
+            application/json:
+              schema:
+                type: object
+components:
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          nullable: true
+        message:
+          type: string
+        traceId:
+          type: string
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: demo123
+    StatusChange:
+      type: object
+      properties:
+        status:
+          type: string
+        step:
+          type: string
+    InventoryAdjust:
+      type: object
+      properties:
+        delta:
+          type: number
+          format: decimal
+    PrintOrder:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        orderNo: { type: string }
+        customerId: { type: integer, format: int64 }
+        customerName: { type: string }
+        storeId: { type: integer, format: int64 }
+        storeName: { type: string }
+        productType: { type: string }
+        colorMode: { type: string }
+        pageCount: { type: integer }
+        copies: { type: integer }
+        dueAt: { type: string }
+        deliveryMode: { type: string }
+        priority: { type: string }
+        status: { type: string }
+        paymentStatus: { type: string }
+        currentStep: { type: string }
+        totalAmount: { type: number }
+        paidAmount: { type: number }
+    Quotation:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        quoteNo: { type: string }
+        orderId: { type: integer, format: int64 }
+        versionNo: { type: integer }
+        subtotal: { type: number }
+        discountRate: { type: number }
+        finalAmount: { type: number }
+        status: { type: string }
+        validUntil: { type: string }
+        approvedBy: { type: string }
+    JobTicket:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        ticketNo: { type: string }
+        orderId: { type: integer, format: int64 }
+        quotationId: { type: integer, format: int64 }
+        specs: { type: string }
+        paperType: { type: string }
+        binding: { type: string }
+        status: { type: string }
+    ProductionTask:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        taskNo: { type: string }
+        jobTicketId: { type: integer, format: int64 }
+        station: { type: string }
+        operatorName: { type: string }
+        plannedStart: { type: string }
+        plannedEnd: { type: string }
+        status: { type: string }
+        progressPercent: { type: integer }
+        qualityStatus: { type: string }
+    InventoryItem:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        sku: { type: string }
+        itemName: { type: string }
+        category: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        safetyStock: { type: number }
+        location: { type: string }
+    DeliveryTask:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        taskNo: { type: string }
+        orderId: { type: integer, format: int64 }
+        mode: { type: string }
+        carrierName: { type: string }
+        targetStore: { type: string }
+        status: { type: string }
+        signedBy: { type: string }
+    InvoiceRecord:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        invoiceNo: { type: string }
+        orderId: { type: integer, format: int64 }
+        title: { type: string }
+        taxNo: { type: string }
+        amount: { type: number }
+        status: { type: string }
+        issuedAt: { type: string }
+    PaymentRecord:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        paymentNo: { type: string }
+        orderId: { type: integer, format: int64 }
+        amount: { type: number }
+        method: { type: string }
+        status: { type: string }
+        paidAt: { type: string }

@@ -9,5 +9,6 @@ __pycache__/
 **/.pytest_cache/
 *.log
 **/target/
+generated-code/printshop-v1/uploads/
 raw/notes/*.tmp
 obsidian-vault/raw/notes/*.tmp

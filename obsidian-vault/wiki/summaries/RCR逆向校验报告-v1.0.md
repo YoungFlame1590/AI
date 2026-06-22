@@ -1,11 +1,10 @@
 # RCR逆向校验报告-v1.0
 
-校验时间：2026-06-22
-
 ## 校验范围
 
 - 代码目录：`generated-code/printshop-v1/`
-- 正向设计资产：MDS、DTS、TLCD、OpenAPI、SRS/RTM
+- 系统形态：Spring Boot 3 + Java 17 + Spring Security + Spring Data JPA + Flyway + MySQL 8
+- 正向设计资产：需求基线、MDS、DTS、TLCD、OpenAPI v2.0
 - 检测口径：架构职责、依赖拓扑、接口契约、需求与角色覆盖四种漂移
 
 ## 校验结果汇总
@@ -23,23 +22,21 @@
 |---|---|---|---|---|---|---|
 | - | - | - | - | 未发现漂移 | - | - |
 
-## 接口扩展说明
-
-Workbench 角色工作台接口（`/api/v1/roles`、`/api/v1/workbench/*`）为 v1 课程演示扩展，用于支撑七类涉众前端操作；它不替代 OpenAPI v1.0 中的六个核心业务接口，因此不计为契约漂移。
-
-## 代码覆盖快照
+## 准生产能力快照
 
 | 项目 | 数量 |
 |---|---:|
-| Controller | 7 |
-| Application Service/Facade | 9 |
-| Repository | 5 |
-| 已识别 HTTP Endpoint | 10 |
-| Workbench 角色动作 | 17 |
+| Controller | 2 |
+| Application Service | 1 |
+| JPA Entity | 12 |
+| JPA Repository | 12 |
+| Flyway 业务表 | 12 |
+| 演示角色账号 | 7 |
+| HTTP Endpoint | 58 |
 
 ## 结论
 
-漂移总数：0 处（高/中/低：0/0/0）
+高严重度漂移：0
 
-- [x] 通过——未发现高严重度漂移，可进入后续质量复核或 v2 演进
-- [ ] 需修复——存在高严重度漂移，需返回代码或设计约束修正
+- [x] 通过——当前 v1 准生产版实现与设计资产一致，可进入运行演示与后续 v2 演进。
+- [ ] 需修复——存在高严重度漂移，应先修正代码或契约。

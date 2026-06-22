@@ -16,9 +16,10 @@ This repository has two main work areas:
   - `templates/`: reusable Markdown templates.
   - `compile.js`: vault integrity checker.
 - `generated-code/printshop-v1/`: generated Java 17 + Spring Boot 3 v1 business application.
-  - `infra/`: audit, stats, state machine, and external adapter placeholders.
-  - module packages such as `ord`, `quo`, `pro`, `dlv`, `fin`, `aud`, and `workbench`: DTOs, in-memory repositories/facades, application services, and controllers.
-  - `src/main/resources/static/`: no-build seven-role business workbench served by Spring Boot at `/`.
+  - Spring Security + Spring Data JPA + Flyway + MySQL 8 Print MIS module.
+  - `mis/domain`, `mis/repository`, `mis/service`, `mis/controller`, `mis/security`: JPA entities, repositories, application service, REST API, and Basic Auth.
+  - `src/main/resources/db/migration/`: Flyway schema and seven demo accounts.
+  - `src/main/resources/static/`: no-build role-oriented MIS frontend served by Spring Boot at `/`.
 
 Root-level `启动需求获取页面.bat` is the main local launcher.
 Root-level `启动n8n-Docker.bat`, `一键启动n8n工作流.bat`, and `一键CCB审批.bat` support the n8n workflow.
@@ -57,6 +58,23 @@ cd generated-code\printshop-v1
 mvn test
 mvn package
 ```
+
+Run the v1 business app with MySQL:
+
+```powershell
+cd generated-code\printshop-v1
+docker compose up -d mysql
+mvn spring-boot:run
+```
+
+The MySQL container maps to `127.0.0.1:13306`, not `3306`, to avoid local MySQL conflicts. For quick demos when Docker cannot pull the image, use:
+
+```powershell
+cd generated-code\printshop-v1
+mvn spring-boot:run -Dspring-boot.run.profiles=demo
+```
+
+Root-level `start-printmis-v1.bat` tries Docker MySQL first and falls back to the H2 demo profile.
 
 Run v1 design drift verification:
 
@@ -112,9 +130,9 @@ cd obsidian-vault; node compile.js
 
 For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`; design-stage constraints write `设计约束/TLCD-三层约束文档-vX.Y.md`, `API契约/OpenAPI-接口契约-vX.Y.yaml`, and `设计约束/约束提示词-vX.Y.md`; v1 code generation writes `generated-code/printshop-v1/` and `wiki/summaries/代码生成/v1代码生成说明.md`.
 
-For v1 frontend work, keep the no-build static approach. The main page is a role workbench, not a raw endpoint console; role actions go through `/api/v1/workbench/actions` and update in-memory state, audit logs, and `/stats`.
+For v1 frontend work, keep the no-build static approach. The main page is a role-oriented Print MIS business system, not a raw endpoint console. Users log in with the seeded accounts (`customer`, `clerk`, `manager`, `ops`, `finance`, `courier`, `admin`, password `demo123`) and use module navigation for orders, files, quotations, job tickets, production tasks, inventory, delivery tasks, invoices, payments, audit logs, reports, and `/stats`. Audit logs are read-only.
 
-For v1 design verification, keep the four-drift scope: architecture responsibility, dependency topology, API contract, and requirement/role coverage. Use `--write` only when intentionally regenerating `RCR逆向校验报告-v1.0.md`, `模块设计质量校验-v1.0.md`, or ADR-002~004.
+For v1 design verification, keep the four-drift scope: architecture responsibility, dependency topology, API contract, and requirement/role coverage. The current contract is `obsidian-vault/wiki/summaries/API契约/OpenAPI-接口契约-v2.0.yaml`. Use `--write` only when intentionally regenerating `RCR逆向校验报告-v1.0.md`, `模块设计质量校验-v1.0.md`, or ADR-002~004.
 
 A2 is advisory in n8n workflow 1: severe issues become an `A2风险提示` node output and do not automatically call A1 rollback. Manual rollback remains available through the web UI or `/api/n8n/a2-rollback`.
 
