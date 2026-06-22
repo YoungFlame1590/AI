@@ -95,6 +95,15 @@ mvn package
 
 角色业务工作台：`http://127.0.0.1:8080/`。页面可切换客户、门店店员、门店店长、总部运营管理员、财务人员、配送/外协人员、系统管理员，执行各自的订单、报价、审批、排产、配送、开票、审计等演示动作。
 
+设计漂移检测：
+
+```powershell
+node generated-code\printshop-v1\scripts\verify-design-drift.js --write
+node generated-code\printshop-v1\scripts\verify-design-drift.js --check
+```
+
+检测覆盖架构职责、依赖拓扑、接口契约、需求与角色覆盖四种漂移，并生成 `RCR逆向校验报告-v1.0.md`、`模块设计质量校验-v1.0.md` 和 `ADR-002` 至 `ADR-004`。
+
 ## n8n 工作流
 
 本仓库提供可导入 n8n 的需求开发全流程工作流：

@@ -58,6 +58,12 @@ mvn test
 mvn package
 ```
 
+Run v1 design drift verification:
+
+```powershell
+node generated-code\printshop-v1\scripts\verify-design-drift.js --check
+```
+
 Run the generated v1 app and open its frontend:
 
 ```powershell
@@ -107,6 +113,8 @@ cd obsidian-vault; node compile.js
 For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`; design-stage constraints write `设计约束/TLCD-三层约束文档-vX.Y.md`, `API契约/OpenAPI-接口契约-vX.Y.yaml`, and `设计约束/约束提示词-vX.Y.md`; v1 code generation writes `generated-code/printshop-v1/` and `wiki/summaries/代码生成/v1代码生成说明.md`.
 
 For v1 frontend work, keep the no-build static approach. The main page is a role workbench, not a raw endpoint console; role actions go through `/api/v1/workbench/actions` and update in-memory state, audit logs, and `/stats`.
+
+For v1 design verification, keep the four-drift scope: architecture responsibility, dependency topology, API contract, and requirement/role coverage. Use `--write` only when intentionally regenerating `RCR逆向校验报告-v1.0.md`, `模块设计质量校验-v1.0.md`, or ADR-002~004.
 
 A2 is advisory in n8n workflow 1: severe issues become an `A2风险提示` node output and do not automatically call A1 rollback. Manual rollback remains available through the web UI or `/api/n8n/a2-rollback`.
 
