@@ -4,9 +4,9 @@
 
 This repository has two main work areas:
 
-- `agent-app/`: FastAPI + CrewAI web app for A1a/A1b elicitation, A2 quality analysis, A3 UML modeling, A4 SRS drafting, A5 validation, A6 baselining, and design-stage architecture work.
+- `agent-app/`: FastAPI + CrewAI web app for A1a/A1b elicitation, A2 quality analysis, A3 UML modeling, A4 SRS drafting, A5 validation, A6 baselining, and design-stage architecture/constraint work.
   - `app.py`: API entrypoint and static web serving.
-  - `agents/`: stakeholder agents, elicitation, quality analysis, UML modeling, SRS drafting, validation, baselining, design architecture, LLM config, and Obsidian record writing.
+  - `agents/`: stakeholder agents, elicitation, quality analysis, UML modeling, SRS drafting, validation, baselining, design architecture, design constraints, LLM config, and Obsidian record writing.
   - `web/`: plain HTML/CSS/JS frontend.
   - `requirements.txt`: Python dependencies.
 - `obsidian-vault/`: Obsidian knowledge base.
@@ -83,7 +83,7 @@ node --check agent-app\web\app.js
 cd obsidian-vault; node compile.js
 ```
 
-For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`.
+For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`; design-stage constraints write `设计约束/TLCD-三层约束文档-vX.Y.md`, `API契约/OpenAPI-接口契约-vX.Y.yaml`, and `设计约束/约束提示词-vX.Y.md`.
 
 A2 is advisory in n8n workflow 1: severe issues become an `A2风险提示` node output and do not automatically call A1 rollback. Manual rollback remains available through the web UI or `/api/n8n/a2-rollback`.
 

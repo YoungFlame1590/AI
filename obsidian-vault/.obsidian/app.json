@@ -6,5 +6,6 @@
   "readableLineLength": true,
   "showLineNumber": false,
   "strictLineBreaks": false,
-  "useMarkdownLinks": false
+  "useMarkdownLinks": false,
+  "showUnsupportedFiles": true
 }

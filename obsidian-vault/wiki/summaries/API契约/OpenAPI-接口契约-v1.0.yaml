@@ -1,0 +1,255 @@
+openapi: 3.0.3
+info:
+  title: 'PrintShop Chain Management API'
+  version: '1.0.0'
+  description: '图文快印门店连锁管理系统接口契约'
+paths:
+  /api/v1/orders:
+    post:
+      operationId: createOrder
+      summary: '创建订单与文件校验'
+      tags:
+        - '订单模块(ORD)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '200':
+          description: '订单创建成功'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '400':
+          description: '文件超限或参数错误'
+        '403':
+          description: '权限拦截'
+  /api/v1/quotations/calculate:
+    post:
+      operationId: calculateQuotation
+      summary: '计算阶梯报价与折扣校验'
+      tags:
+        - '报价模块(QUO)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+      responses:
+        '200':
+          description: '报价计算成功'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/Quotation'
+        '400':
+          description: '参数缺失'
+        '422':
+          description: '折扣矩阵校验失败'
+  /api/v1/productions/dispatch:
+    post:
+      operationId: dispatchProduction
+      summary: '下发排产指令与额度校验'
+      tags:
+        - '排产模块(PRO)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionTask'
+      responses:
+        '200':
+          description: '排产下发成功'
+        '409':
+          description: '状态冲突或大单保护锁拦截'
+        '403':
+          description: '信用额度超限'
+  /api/v1/deliveries/route:
+    post:
+      operationId: routeDelivery
+      summary: '跨店路由决策与任务下发'
+      tags:
+        - '配送外协模块(DLV)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryTask'
+      responses:
+        '200':
+          description: '路由决策成功'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/DeliveryTask'
+        '422':
+          description: '无满足SLA时效的目标门店'
+  /api/v1/invoices/issue:
+    post:
+      operationId: issueInvoice
+      summary: '开具电子发票与外协占比拦截'
+      tags:
+        - '财务模块(FIN)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+      responses:
+        '200':
+          description: '发票开具成功'
+        '400':
+          description: '外协占比超标或金额超限拦截'
+  /api/v1/audit-logs:
+    get:
+      operationId: getAuditLogs
+      summary: '查询全量审计日志'
+      tags:
+        - '审计模块(AUD)'
+      parameters:
+        - name: orderId
+          in: query
+          schema:
+            type: string
+        - name: operatorId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: '查询成功'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+components:
+  schemas:
+    Order:
+      type: object
+      properties:
+        orderId:
+          type: string
+          description: '全局唯一工单号'
+        orderStatus:
+          type: string
+          description: '系统内部流转状态'
+        fileSizeMb:
+          type: number
+          description: '文件大小(MB)'
+        pageCount:
+          type: integer
+          description: '文件总页数'
+        paymentStatus:
+          type: string
+          description: '支付资金状态'
+        financialVerifyStatus:
+          type: string
+          description: '财务核销状态'
+    Quotation:
+      type: object
+      properties:
+        quotationId:
+          type: string
+        orderId:
+          type: string
+        discountRate:
+          type: number
+          description: '折扣比例'
+        finalAmount:
+          type: number
+          description: '实收金额'
+        approvalStatus:
+          type: string
+          description: '审批状态'
+    ProductionTask:
+      type: object
+      properties:
+        taskId:
+          type: string
+        orderId:
+          type: string
+        deviceSn:
+          type: string
+          description: '绑定生产机台序列号'
+        slaDeadline:
+          type: string
+          format: date-time
+          description: '承诺交付截止时间'
+        creditLimitUsed:
+          type: number
+          description: '信用单当月累计已用额度'
+    DeliveryTask:
+      type: object
+      properties:
+        taskId:
+          type: string
+        orderId:
+          type: string
+        targetStoreId:
+          type: string
+          description: '目标派单门店'
+        financialVerifyStatus:
+          type: string
+          description: '财务核销状态覆盖值'
+        outsourcingCostRatio:
+          type: number
+          description: '外协成本占比'
+    Invoice:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        orderId:
+          type: string
+        invoiceStatus:
+          type: string
+          description: '发票流转状态'
+        amount:
+          type: number
+          description: '开票金额'
+        triggerMode:
+          type: string
+          description: '触发模式(预开/交付后开)'
+    AuditLog:
+      type: object
+      properties:
+        logId:
+          type: string
+        operatorId:
+          type: string
+          description: '操作人工号'
+        action:
+          type: string
+          description: '操作动作'
+        snapshot:
+          type: string
+          description: '变更快照(JSON)'
+        timestamp:
+          type: string
+          format: date-time
+          description: '精确到秒时间戳'

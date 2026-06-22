@@ -12,6 +12,7 @@ const state = {
   a5Status: null,
   a6Status: null,
   designStatus: null,
+  designConstraintsStatus: null,
   savedRecords: [],
   busy: false,
   batchRunning: false,
@@ -46,6 +47,8 @@ const els = {
   a6CreateBaseline: document.querySelector("#a6CreateBaseline"),
   designStatus: document.querySelector("#designStatus"),
   designRun: document.querySelector("#designRun"),
+  designConstraintsStatus: document.querySelector("#designConstraintsStatus"),
+  designConstraintsRun: document.querySelector("#designConstraintsRun"),
   a2Output: document.querySelector("#a2Output"),
   a2OutputText: document.querySelector("#a2OutputText"),
   records: document.querySelector("#records"),
@@ -82,6 +85,7 @@ function setBusy(isBusy) {
   els.acceptA5Risks.disabled = locked || !needsRiskAcceptance;
   els.a6CreateBaseline.disabled = locked || !hasKey() || !state.a6Status?.canCreateBaseline || (needsRiskAcceptance && !els.acceptA5Risks.checked);
   els.designRun.disabled = locked || !hasKey() || !state.designStatus?.canRun;
+  els.designConstraintsRun.disabled = locked || !hasKey() || !state.designConstraintsStatus?.canRun;
   els.stakeholderSelect.disabled = locked;
   els.saveRecord.disabled = locked || state.manualRounds.every((round) => round.savedPath);
   els.clearChat.disabled = locked;
@@ -261,6 +265,17 @@ async function loadDesignStatus() {
   const outputCount = (data.designOutputs || []).length;
   els.designStatus.textContent = `${baselineText} · ${srsText} · UML ${data.umlCount} 个（用例图 ${data.useCaseCount}，活动图 ${data.activityCount}） · 已有设计产物 ${outputCount} 份 · 模型：${data.designModel} · ${data.message}`;
   els.designStatus.className = data.canRun ? "status ready" : "status error";
+  setBusy(state.busy);
+}
+
+async function loadDesignConstraintsStatus() {
+  const response = await fetch("/api/design/constraints/status");
+  const data = await response.json();
+  state.designConstraintsStatus = data;
+  const baselineText = data.latestBaseline ? `基线：${data.latestBaseline}` : "缺少需求基线";
+  const step1Text = `第一步产物 ${data.step1Count}/${data.requiredStep1Count}`;
+  els.designConstraintsStatus.textContent = `${baselineText} · ${step1Text} · 约束产物 ${data.constraintsCount} 份 · API契约 ${data.apiContractsCount} 份 · 模型：${data.designModel} · ${data.message}`;
+  els.designConstraintsStatus.className = data.canRun ? "status ready" : "status error";
   setBusy(state.busy);
 }
 
@@ -591,6 +606,7 @@ els.a6CreateBaseline.addEventListener("click", async () => {
     appendSystemMessage(`A6 需求基线已创建：${data.relativePath}`);
     await loadA6Status();
     await loadDesignStatus();
+    await loadDesignConstraintsStatus();
   } catch (error) {
     els.a6Status.textContent = `A6 创建基线失败：${error.message}`;
     els.a6Status.className = "status error";
@@ -618,9 +634,37 @@ els.designRun.addEventListener("click", async () => {
     );
     appendSystemMessage(`设计阶段第一步完成：${data.selectedArchitecture}，已生成 6 份产物。`);
     await loadDesignStatus();
+    await loadDesignConstraintsStatus();
   } catch (error) {
     els.designStatus.textContent = `设计阶段运行失败：${error.message}`;
     els.designStatus.className = "status error";
+    appendSystemMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.designConstraintsRun.addEventListener("click", async () => {
+  if (!hasKey() || !state.designConstraintsStatus?.canRun) return;
+  setBusy(true);
+  els.designConstraintsStatus.textContent = "设计阶段第二步正在生成 TLCD、OpenAPI 契约与约束提示词...";
+  els.designConstraintsStatus.className = "status ready";
+  try {
+    const data = await api("/api/design/constraints/run", {
+      apiKey: state.apiKey,
+    });
+    const fileList = (data.files || []).map((item) => `- ${item}`).join("\n");
+    const domainList = (data.apiDomains || []).map((item) => `- ${item}`).join("\n");
+    els.designConstraintsStatus.textContent = data.completion;
+    showA2Output(
+      "设计阶段：约束与接口契约",
+      `${data.completion}\n\n## 输入基线\n- ${data.latestBaseline}\n- ${data.srsPath}\n\n## API覆盖业务域\n${domainList || "- 未返回业务域"}\n\n## 生成文件\n${fileList}\n\n## 摘要\n${data.summary}`
+    );
+    appendSystemMessage("设计阶段第二步完成：已生成 TLCD、OpenAPI 契约与约束提示词。");
+    await loadDesignConstraintsStatus();
+  } catch (error) {
+    els.designConstraintsStatus.textContent = `设计阶段第二步运行失败：${error.message}`;
+    els.designConstraintsStatus.className = "status error";
     appendSystemMessage(error.message);
   } finally {
     setBusy(false);
@@ -659,7 +703,7 @@ els.clearChat.addEventListener("click", () => {
   setBusy(false);
 });
 
-Promise.allSettled([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status(), loadA6Status(), loadDesignStatus()]).then((results) => {
+Promise.allSettled([loadConfig(), loadStakeholders(), loadA2NotesStatus(), loadA3Status(), loadA4Status(), loadA5Status(), loadA6Status(), loadDesignStatus(), loadDesignConstraintsStatus()]).then((results) => {
   const failed = results.filter((result) => result.status === "rejected");
   if (failed.length > 0) {
     const message = failed.map((result) => result.reason?.message || "状态读取失败").join("；");

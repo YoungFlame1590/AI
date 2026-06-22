@@ -18,6 +18,7 @@ from agents.a4_srs_writer import A4_MODEL, a4_status, generate_srs, revise_srs_f
 from agents.a5_requirement_validator import A5_MODEL, a5_status, validate_requirements
 from agents.a6_baseline_manager import A6_MODEL, a6_status, create_baseline
 from agents.design_architect import DESIGN_MODEL, design_status, run_design_architecture
+from agents.design_constraints import design_constraints_status, run_design_constraints
 from agents.llm_config import create_llm, get_base_url, get_model_name
 from agents.recording import REPO_ROOT, VAULT_ROOT, list_records, save_record
 
@@ -430,5 +431,19 @@ def design_architecture_run(payload: A2AnalyzeRequest) -> dict[str, Any]:
     try:
         llm = create_llm(payload.apiKey, model_override=DESIGN_MODEL)
         return run_design_architecture(llm)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@app.get("/api/design/constraints/status")
+def design_constraints_api_status() -> dict[str, Any]:
+    return design_constraints_status()
+
+
+@app.post("/api/design/constraints/run")
+def design_constraints_api_run(payload: A2AnalyzeRequest) -> dict[str, Any]:
+    try:
+        llm = create_llm(payload.apiKey, model_override=DESIGN_MODEL)
+        return run_design_constraints(llm)
     except Exception as exc:
         raise _http_error(exc) from exc
