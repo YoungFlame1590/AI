@@ -17,9 +17,10 @@ This repository has two main work areas:
   - `compile.js`: vault integrity checker.
 - `generated-code/printshop-v1/`: generated Java 17 + Spring Boot 3 v1 business application.
   - Spring Security + Spring Data JPA + Flyway + MySQL 8 Print MIS module.
-  - `mis/domain`, `mis/repository`, `mis/service`, `mis/controller`, `mis/security`: JPA entities, repositories, application service, REST API, and Basic Auth.
+  - `mis/domain`, `mis/repository`, `mis/security`: JPA entities, repositories, and Basic Auth.
+  - `mis/identity`, `mis/order`, `mis/quotation`, `mis/job`, `mis/production`, `mis/inventory`, `mis/delivery`, `mis/finance`, `mis/audit`, `mis/reporting`, `mis/dashboard`: module controllers and services.
   - `src/main/resources/db/migration/`: Flyway schema and seven demo accounts.
-  - `src/main/resources/static/`: no-build role-oriented MIS frontend served by Spring Boot at `/`.
+  - `src/main/resources/static/js/`: no-build ES module frontend (`config`, `state`, `api`, `orders`, `render`, `main`) served by Spring Boot at `/`.
 
 Root-level `启动需求获取页面.bat` is the main local launcher.
 Root-level `启动n8n-Docker.bat`, `一键启动n8n工作流.bat`, and `一键CCB审批.bat` support the n8n workflow.
@@ -57,6 +58,7 @@ Build and test the generated v1 business app:
 cd generated-code\printshop-v1
 mvn test
 mvn package
+Get-ChildItem src\main\resources\static\js -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 
 Run the v1 business app with MySQL:
@@ -130,7 +132,7 @@ cd obsidian-vault; node compile.js
 
 For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 writes records under `obsidian-vault/raw/notes/`; A3 writes UML outputs under `obsidian-vault/wiki/summaries/UML模型/`; A4 writes SRS drafts as `obsidian-vault/wiki/summaries/SRS-初稿-vX.Y.md`; A5 writes validation reports as `obsidian-vault/wiki/summaries/需求验证报告-vX.Y.md`; A6 writes approved baselines under `obsidian-vault/wiki/baselines/BL-YYYYMMDD-NN/`; design-stage architecture writes `知识图谱节点清单-vX.Y.md`, `架构选型报告-vX.Y.md`, `ASD-架构风格声明-vX.Y.md`, `MDS-模块划分方案-vX.Y.md`, `DTS-依赖拓扑-vX.Y.md`, and `ADR-001-架构选型-vX.Y.md`; design-stage constraints write `设计约束/TLCD-三层约束文档-vX.Y.md`, `API契约/OpenAPI-接口契约-vX.Y.yaml`, and `设计约束/约束提示词-vX.Y.md`; v1 code generation writes `generated-code/printshop-v1/` and `wiki/summaries/代码生成/v1代码生成说明.md`.
 
-For v1 frontend work, keep the no-build static approach. The main page is a role-oriented Print MIS business system, not a raw endpoint console. Users log in with the seeded accounts (`customer`, `clerk`, `manager`, `ops`, `finance`, `courier`, `admin`, password `demo123`) and use module navigation for orders, files, quotations, job tickets, production tasks, inventory, delivery tasks, invoices, payments, audit logs, reports, and `/stats`. Audit logs are read-only.
+For v1 frontend work, keep the no-build static approach. The main page is a role-oriented Print MIS business system, not a raw endpoint console. Users log in with the seeded accounts (`customer`, `clerk`, `manager`, `ops`, `finance`, `courier`, `admin`, password `demo123`) and use module navigation for orders, files, quotations, job tickets, production tasks, inventory, delivery tasks, invoices, payments, audit logs, reports, and `/stats`. Business seed data should stay empty by default; keep only base stores, default inventory, and the seven accounts. Admin-only `DELETE /api/admin/business-data` clears generated business data while preserving those accounts and default inventory. Order-detail quick workflow actions may generate quotation, job ticket, production, delivery, payment, refund, and invoice records from the selected order, but must still enforce role permissions. Couriers accept and sign delivery tasks; they must not generate delivery tasks or manage order files. Audit logs are read-only.
 
 For v1 design verification, keep the four-drift scope: architecture responsibility, dependency topology, API contract, and requirement/role coverage. The current contract is `obsidian-vault/wiki/summaries/API契约/OpenAPI-接口契约-v2.0.yaml`. Use `--write` only when intentionally regenerating `RCR逆向校验报告-v1.0.md`, `模块设计质量校验-v1.0.md`, or ADR-002~004.
 
@@ -149,5 +151,5 @@ Generated notes, A2 reports, A3 UML files, A4 SRS drafts, A5 validation reports,
 API keys are entered in the webpage and must not be committed. A1/A2 default to `qwen3.6-flash`; A3/A4 use `qwen3.6-plus`; A5/A6/design-stage architecture use `qwen3.7-plus`. Keep `.env`, `.venv/`, `__pycache__/`, and local Obsidian plugin state out of source commits unless intentionally requested. Before pushing, search for leaked secrets:
 
 ```powershell
-rg -n "ghp_|DASHSCOPE_API_KEY|test-key" -g "!*.git/**" -g "!**/.venv/**"
+rg -n "token-prefix|api-key-env-name|test-key" -g "!*.git/**" -g "!**/.venv/**"
 ```

@@ -1,0 +1,10 @@
+DELETE FROM audit_logs;
+DELETE FROM payments;
+DELETE FROM invoices;
+DELETE FROM delivery_tasks;
+DELETE FROM production_tasks;
+DELETE FROM job_tickets;
+DELETE FROM quotations;
+DELETE FROM order_files;
+DELETE FROM inventory_items;
+DELETE FROM print_orders;

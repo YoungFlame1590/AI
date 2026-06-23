@@ -1,0 +1,443 @@
+openapi: 3.0.3
+info:
+  title: 'PrintShop Chain Management API'
+  version: '1.1.0'
+  description: '图文快印门店连锁管理系统 v1.1 接口契约，保留核心业务动作并补齐基础 CRUD。'
+paths:
+  /api/v1/orders:
+    get:
+      operationId: listOrders
+      summary: '查询订单列表'
+      tags: ['订单模块(ORD)']
+      responses:
+        '200':
+          description: '查询成功'
+    post:
+      operationId: createOrder
+      summary: '创建订单与文件校验'
+      tags: ['订单模块(ORD)']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '200':
+          description: '订单创建成功'
+        '400':
+          description: '文件超限或参数错误'
+  /api/v1/orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: '查询订单详情'
+      tags: ['订单模块(ORD)']
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+      responses:
+        '200':
+          description: '查询成功'
+        '404':
+          description: '订单不存在'
+    put:
+      operationId: updateOrder
+      summary: '更新订单'
+      tags: ['订单模块(ORD)']
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '200':
+          description: '更新成功'
+        '404':
+          description: '订单不存在'
+    delete:
+      operationId: deleteOrder
+      summary: '删除订单'
+      tags: ['订单模块(ORD)']
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+      responses:
+        '200':
+          description: '删除成功，返回被删除订单'
+        '404':
+          description: '订单不存在'
+  /api/v1/quotations:
+    get:
+      operationId: listQuotations
+      summary: '查询报价列表'
+      tags: ['报价模块(QUO)']
+      responses:
+        '200':
+          description: '查询成功'
+  /api/v1/quotations/calculate:
+    post:
+      operationId: calculateQuotation
+      summary: '计算阶梯报价与折扣校验'
+      tags: ['报价模块(QUO)']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+      responses:
+        '200':
+          description: '报价计算成功'
+        '422':
+          description: '折扣矩阵校验失败'
+  /api/v1/quotations/{quotationId}:
+    get:
+      operationId: getQuotation
+      summary: '查询报价详情'
+      tags: ['报价模块(QUO)']
+      parameters:
+        - $ref: '#/components/parameters/quotationId'
+      responses:
+        '200':
+          description: '查询成功'
+        '404':
+          description: '报价不存在'
+    put:
+      operationId: updateQuotation
+      summary: '更新报价'
+      tags: ['报价模块(QUO)']
+      parameters:
+        - $ref: '#/components/parameters/quotationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotation'
+      responses:
+        '200':
+          description: '更新成功'
+        '404':
+          description: '报价不存在'
+    delete:
+      operationId: deleteQuotation
+      summary: '删除报价'
+      tags: ['报价模块(QUO)']
+      parameters:
+        - $ref: '#/components/parameters/quotationId'
+      responses:
+        '200':
+          description: '删除成功，返回被删除报价'
+  /api/v1/productions:
+    get:
+      operationId: listProductionTasks
+      summary: '查询排产任务列表'
+      tags: ['排产模块(PRO)']
+      responses:
+        '200':
+          description: '查询成功'
+  /api/v1/productions/dispatch:
+    post:
+      operationId: dispatchProduction
+      summary: '下发排产指令与额度校验'
+      tags: ['排产模块(PRO)']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionTask'
+      responses:
+        '200':
+          description: '排产下发成功'
+        '409':
+          description: '状态冲突或机台不可用'
+  /api/v1/productions/{taskId}:
+    get:
+      operationId: getProductionTask
+      summary: '查询排产任务详情'
+      tags: ['排产模块(PRO)']
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: '查询成功'
+    put:
+      operationId: updateProductionTask
+      summary: '更新排产任务'
+      tags: ['排产模块(PRO)']
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionTask'
+      responses:
+        '200':
+          description: '更新成功'
+    delete:
+      operationId: deleteProductionTask
+      summary: '删除排产任务'
+      tags: ['排产模块(PRO)']
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: '删除成功，返回被删除排产任务'
+  /api/v1/deliveries:
+    get:
+      operationId: listDeliveryTasks
+      summary: '查询配送任务列表'
+      tags: ['配送外协模块(DLV)']
+      responses:
+        '200':
+          description: '查询成功'
+  /api/v1/deliveries/route:
+    post:
+      operationId: routeDelivery
+      summary: '跨店路由决策与任务下发'
+      tags: ['配送外协模块(DLV)']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryTask'
+      responses:
+        '200':
+          description: '路由决策成功'
+  /api/v1/deliveries/{taskId}:
+    get:
+      operationId: getDeliveryTask
+      summary: '查询配送任务详情'
+      tags: ['配送外协模块(DLV)']
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: '查询成功'
+    put:
+      operationId: updateDeliveryTask
+      summary: '更新配送任务'
+      tags: ['配送外协模块(DLV)']
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryTask'
+      responses:
+        '200':
+          description: '更新成功'
+    delete:
+      operationId: deleteDeliveryTask
+      summary: '删除配送任务'
+      tags: ['配送外协模块(DLV)']
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: '删除成功，返回被删除配送任务'
+  /api/v1/invoices:
+    get:
+      operationId: listInvoices
+      summary: '查询发票列表'
+      tags: ['财务模块(FIN)']
+      responses:
+        '200':
+          description: '查询成功'
+  /api/v1/invoices/issue:
+    post:
+      operationId: issueInvoice
+      summary: '开具电子发票与外协占比拦截'
+      tags: ['财务模块(FIN)']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+      responses:
+        '200':
+          description: '发票开具成功'
+  /api/v1/invoices/{invoiceId}:
+    get:
+      operationId: getInvoice
+      summary: '查询发票详情'
+      tags: ['财务模块(FIN)']
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+      responses:
+        '200':
+          description: '查询成功'
+    put:
+      operationId: updateInvoice
+      summary: '更新发票'
+      tags: ['财务模块(FIN)']
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+      responses:
+        '200':
+          description: '更新成功'
+    delete:
+      operationId: deleteInvoice
+      summary: '删除发票'
+      tags: ['财务模块(FIN)']
+      parameters:
+        - $ref: '#/components/parameters/invoiceId'
+      responses:
+        '200':
+          description: '删除成功，返回被删除发票'
+  /api/v1/audit-logs:
+    get:
+      operationId: getAuditLogs
+      summary: '查询审计日志'
+      tags: ['审计模块(AUD)']
+      parameters:
+        - name: orderId
+          in: query
+          schema:
+            type: string
+        - name: operatorId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: '查询成功'
+  /api/v1/audit-logs/{logId}:
+    get:
+      operationId: getAuditLog
+      summary: '查询审计日志详情'
+      tags: ['审计模块(AUD)']
+      parameters:
+        - $ref: '#/components/parameters/logId'
+      responses:
+        '200':
+          description: '查询成功'
+        '404':
+          description: '审计日志不存在'
+components:
+  parameters:
+    orderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+    quotationId:
+      name: quotationId
+      in: path
+      required: true
+      schema:
+        type: string
+    taskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: string
+    invoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema:
+        type: string
+    logId:
+      name: logId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Order:
+      type: object
+      properties:
+        orderId:
+          type: string
+        orderStatus:
+          type: string
+        fileSizeMb:
+          type: number
+        pageCount:
+          type: integer
+        paymentStatus:
+          type: string
+        financialVerifyStatus:
+          type: string
+    Quotation:
+      type: object
+      properties:
+        quotationId:
+          type: string
+        orderId:
+          type: string
+        discountRate:
+          type: number
+        finalAmount:
+          type: number
+        approvalStatus:
+          type: string
+    ProductionTask:
+      type: object
+      properties:
+        taskId:
+          type: string
+        orderId:
+          type: string
+        deviceSn:
+          type: string
+        slaDeadline:
+          type: string
+        creditLimitUsed:
+          type: number
+    DeliveryTask:
+      type: object
+      properties:
+        taskId:
+          type: string
+        orderId:
+          type: string
+        targetStoreId:
+          type: string
+        financialVerifyStatus:
+          type: string
+        outsourcingCostRatio:
+          type: number
+    Invoice:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        orderId:
+          type: string
+        invoiceStatus:
+          type: string
+        amount:
+          type: number
+        triggerMode:
+          type: string
+    AuditLog:
+      type: object
+      properties:
+        logId:
+          type: string
+        operatorId:
+          type: string
+        action:
+          type: string
+        snapshot:
+          type: string
+        timestamp:
+          type: string

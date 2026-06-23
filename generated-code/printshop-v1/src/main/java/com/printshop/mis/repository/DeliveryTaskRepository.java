@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DeliveryTaskRepository extends JpaRepository<DeliveryTask, Long> {
     List<DeliveryTask> findByStatusOrderByUpdatedAtDesc(String status);
+    List<DeliveryTask> findByOrderId(Long orderId);
 }

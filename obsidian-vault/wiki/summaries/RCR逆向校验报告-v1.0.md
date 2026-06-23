@@ -26,13 +26,13 @@
 
 | 项目 | 数量 |
 |---|---:|
-| Controller | 2 |
-| Application Service | 1 |
+| Controller | 14 |
+| Application Service | 13 |
 | JPA Entity | 12 |
 | JPA Repository | 12 |
 | Flyway 业务表 | 12 |
 | 演示角色账号 | 7 |
-| HTTP Endpoint | 58 |
+| HTTP Endpoint | 68 |
 
 ## 结论
 

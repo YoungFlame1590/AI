@@ -88,6 +88,7 @@ paths:
     get:
       tags: [Order]
       summary: 订单列表
+      description: 按当前登录用户角色与门店过滤；客户仅返回本人订单，门店角色仅返回本门店订单，配送角色仅返回本人或待接单配送相关订单。
       responses:
         '200':
           description: 按当前角色过滤的订单列表
@@ -98,6 +99,7 @@ paths:
     post:
       tags: [Order]
       summary: 创建订单
+      description: customerId、customerName、dueAt、totalAmount 由服务端生成或计算；客户端只能提交订单规格、数量和交付选项。
       requestBody:
         required: true
         content:
@@ -115,6 +117,7 @@ paths:
     get:
       tags: [Order]
       summary: 订单详情
+      description: 仅允许访问当前登录用户可见范围内的订单。
       parameters:
         - $ref: '#/components/parameters/id'
       responses:
@@ -127,6 +130,7 @@ paths:
     put:
       tags: [Order]
       summary: 更新订单
+      description: 按角色限制可修改字段；totalAmount 由服务端重新计算，客户端传入值不会作为可信金额。
       parameters:
         - $ref: '#/components/parameters/id'
       requestBody:
@@ -895,17 +899,32 @@ components:
         customerName: { type: string }
         storeId: { type: integer, format: int64 }
         storeName: { type: string }
-        productType: { type: string }
-        colorMode: { type: string }
+        productType:
+          type: string
+          enum: [论文胶装, 培训手册, 名片快印, 海报写真, 宣传单页, 写真展板]
+          description: 固定产品类型选项。
+        colorMode:
+          type: string
+          enum: [黑白, 彩色, 黑白加彩页, 覆膜, 装订加覆膜]
+          description: 固定颜色与后道工艺选项。
         pageCount: { type: integer }
         copies: { type: integer }
-        dueAt: { type: string }
-        deliveryMode: { type: string }
-        priority: { type: string }
+        dueAt:
+          type: string
+          description: 创建订单时默认等于服务端创建时间。
+        deliveryMode:
+          type: string
+          enum: [到店自提, 同城配送, 跨店配送, 外协配送]
+        priority:
+          type: string
+          enum: [普通, 加急, 特急]
         status: { type: string }
         paymentStatus: { type: string }
         currentStep: { type: string }
-        totalAmount: { type: number }
+        totalAmount:
+          type: number
+          readOnly: true
+          description: 服务端根据产品类型、颜色工艺、页数、份数、交付方式和优先级自动计算。
         paidAmount: { type: number }
     Quotation:
       type: object

@@ -10,7 +10,42 @@
 - Spring Data JPA
 - Flyway
 - MySQL 8
-- 原生 HTML/CSS/JavaScript 静态前端
+- 原生 HTML/CSS/JavaScript 静态前端，使用 ES module 分层
+
+## 代码分层
+
+后端按业务能力拆包，API 路径保持不变：
+
+```text
+src/main/java/com/printshop/
+  common/          统一响应、异常处理
+  infra/           追踪、统计和外部系统防腐层入口
+  mis/domain/      JPA 实体
+  mis/repository/  Spring Data JPA 仓储
+  mis/identity/    登录、当前用户、用户与门店查询
+  mis/order/       订单、订单文件、访问策略、固定选项与自动计价
+  mis/maintenance/ 管理员清空业务数据
+  mis/quotation/   报价、折扣、审批
+  mis/job/         作业单
+  mis/production/  生产排程、完工质检
+  mis/inventory/   库存、调整、低库存
+  mis/delivery/    配送/外协与签收
+  mis/finance/     发票、收款、退款
+  mis/audit/       审计日志
+  mis/reporting/   报表
+  mis/dashboard/   当前用户工作台
+```
+
+前端入口为 `src/main/resources/static/index.html`，加载 `js/main.js`。前端模块：
+
+```text
+static/js/config.js   模块配置、角色菜单、订单选项、价目表
+static/js/state.js    登录用户、当前模块、选中记录、编辑状态
+static/js/api.js      fetch、鉴权 header、错误处理
+static/js/orders.js   订单字段权限、固定下拉、金额预估
+static/js/render.js   导航、表格、详情、指标、时间线渲染
+static/js/main.js     事件绑定与启动入口
+```
 
 ## 启动
 
@@ -48,6 +83,12 @@ http://127.0.0.1:8080/swagger-ui.html
 
 ## 演示账号
 
+系统默认只初始化基础门店和七类账号，不再初始化订单、报价、库存、配送、发票、付款或审计样例数据。登录后可以从客户下单开始自己走完整流程。
+
+系统会初始化默认库存，包括 A4 纸、铜版纸、彩色墨粉/墨水和装订耗材。生产任务完工质检通过后，会按订单页数、份数和工艺自动扣减库存。
+
+如果演示过程中产生了业务数据，使用 `admin/demo123` 登录后点击顶栏“清空业务数据”，会删除订单、报价、作业单、生产、配送、财务和审计数据，并保留基础门店、七类账号与默认库存。
+
 | 账号 | 密码 | 角色 |
 |---|---|---|
 | `customer` | `demo123` | 客户 |
@@ -70,12 +111,36 @@ http://127.0.0.1:8080/swagger-ui.html
 - 财务：收款、退款、开票、日结摘要。
 - 审计与报表：操作日志、订单漏斗、生产负载、财务摘要、`/stats`。
 
+## 订单权限与计价
+
+- 客户只查看和维护自己的订单；门店店员/店长只查看本门店订单；总部运营、财务和管理员按职责查看全局订单；配送/外协只查看分配给自己或待接单的配送相关订单。
+- 订单产品类型、颜色/工艺、交付方式和优先级均为固定选项。页面使用下拉框，后端会再次校验。
+- 订单金额由后端按固定价目表计算，前端只显示预估金额；客户端传入的 `totalAmount` 不作为可信金额。
+- 新建订单时客户默认为当前登录用户，交付时间默认填服务端创建时间。
+- 客户可将早期订单提交审核，但不能越权流转到生产、交付等内部状态。
+
+## 订单快捷流转
+
+订单详情提供角色化快捷动作，减少跨模块复制 ID：
+
+- 门店店员/店长/管理员：生成报价、生成作业单。
+- 店长/总部运营/管理员：创建排产任务。
+- 总部运营/配送外协/管理员：生成配送任务。
+- 配送/外协人员：接受待接配送订单、签收配送任务；不显示上传/查看文件，也不能生成配送任务。
+- 财务/管理员：登记收款、生成发票。
+- 客户/财务/管理员：生成退款记录。
+- 管理员：一键跑完整链路，用于课堂快速验收。
+
+快捷动作仍会走后端权限校验、审计记录和 `/stats` 统计；不符合角色职责的操作会返回 403。
+
+完整操作顺序见 [docs/操作流程.md](docs/操作流程.md)。系统会阻止越级操作，例如未提交审核不能报价、未完成生产质检不能生成配送、未收款不能开票或退款。
+
 ## 常用命令
 
 ```powershell
 mvn test
 mvn package
-node --check src\main\resources\static\app.js
+Get-ChildItem src\main\resources\static\js -Filter *.js | ForEach-Object { node --check $_.FullName }
 node scripts\verify-design-drift.js --check
 ```
 
@@ -101,6 +166,7 @@ node scripts\verify-design-drift.js --write
 - `/api/payments`
 - `/api/audit-logs`
 - `/api/reports`
+- `/api/admin/business-data`
 - `/stats`
 
 ## v1 边界

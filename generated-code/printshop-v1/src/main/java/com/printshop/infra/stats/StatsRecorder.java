@@ -25,6 +25,12 @@ public class StatsRecorder {
         lastRequestAt = Instant.now();
     }
 
+    public void reset() {
+        totalRequests.set(0);
+        moduleCounts.clear();
+        lastRequestAt = null;
+    }
+
     public StatsResponse snapshot() {
         Map<String, Long> counts = moduleCounts.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(Comparator.naturalOrder()))
