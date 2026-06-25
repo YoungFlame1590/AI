@@ -170,6 +170,25 @@ node scripts\verify-design-drift.js --check
 node scripts\verify-change-regression.js --check
 ```
 
+## 批量数据与报表压测
+
+需要验证报表、列表、权限和流程性能时，可以先启动 v2，再通过 API 注入一批真实业务数据：
+
+```powershell
+cd generated-code\printshop-v2
+.\scripts\seed-demo-data.ps1 -BaseUrl http://127.0.0.1:8080 -Orders 300 -Clear
+```
+
+脚本会使用七类演示账号中的 `customer`、`clerk`、`ops`、`courier`、`finance`、`admin`，按 `SUBMITTED`、`REVIEWING`、`QUOTED`、`JOB_READY`、`IN_PRODUCTION`、`PRODUCTION_DONE`、`DELIVERING`、`DONE` 分布创建订单，并补充部分收款、发票和退款数据。默认会先给库存加量，避免大批量排产被库存耗尽打断。
+
+注入后可以快速压测报表、订单列表、工作台和 `/stats`：
+
+```powershell
+.\scripts\load-test-reports.ps1 -BaseUrl http://127.0.0.1:8080 -Requests 200
+```
+
+如果需要从干净环境重新开始，继续用管理员页面“清空业务数据”或脚本的 `-Clear` 参数。
+
 生成或更新 RCR/质量校验/ADR-002~004：
 
 ```powershell
