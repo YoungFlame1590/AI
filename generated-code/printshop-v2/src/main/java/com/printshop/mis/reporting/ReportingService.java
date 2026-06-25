@@ -1,13 +1,17 @@
 package com.printshop.mis.reporting;
 
 import com.printshop.mis.domain.InventoryItem;
+import com.printshop.mis.domain.PaymentRecord;
+import com.printshop.mis.domain.PrintOrder;
 import com.printshop.mis.repository.InventoryItemRepository;
 import com.printshop.mis.repository.InvoiceRecordRepository;
 import com.printshop.mis.repository.PaymentRecordRepository;
 import com.printshop.mis.repository.PrintOrderRepository;
 import com.printshop.mis.repository.ProductionTaskRepository;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,17 +40,27 @@ public class ReportingService {
     }
 
     public Map<String, Object> reports() {
+        var allOrders = orders.findAll();
+        var allPayments = payments.findAll();
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("orderFunnel", Map.of(
-                "submitted", countOrders("SUBMITTED"),
-                "quoted", countOrders("QUOTED"),
-                "jobReady", countOrders("JOB_READY"),
-                "production", countOrders("IN_PRODUCTION")
-        ));
+        result.put("orderFunnel", orderFunnel(allOrders));
         result.put("finance", Map.of(
                 "invoiceCount", invoices.count(),
-                "paymentCount", payments.count()
+                "issuedInvoiceCount", invoices.findAll().stream().filter(invoice -> "ISSUED".equals(invoice.status)).count(),
+                "paymentCount", allPayments.size(),
+                "paidAmount", sumPayments(allPayments, "SUCCESS"),
+                "refundAmount", sumPayments(allPayments, "REFUNDED")
         ));
+        result.put("operations", Map.of(
+                "totalOrders", allOrders.size(),
+                "completedOrders", allOrders.stream().filter(order -> "DONE".equals(order.status)).count(),
+                "refundedOrders", allOrders.stream().filter(order -> "REFUNDED".equals(order.status)).count(),
+                "activeOrders", allOrders.stream().filter(order -> !java.util.Set.of("DONE", "REFUNDED", "CANCELLED").contains(order.status)).count()
+        ));
+        result.put("storeSummary", allOrders.stream()
+                .collect(Collectors.groupingBy(order -> order.storeName == null ? "未分配门店" : order.storeName,
+                        LinkedHashMap::new,
+                        Collectors.collectingAndThen(Collectors.toList(), this::storeStats))));
         result.put("productionLoad", productionTasks.findAll());
         result.put("lowStock", inventoryItems.findAll().stream()
                 .filter(this::isLowStock)
@@ -54,10 +68,29 @@ public class ReportingService {
         return result;
     }
 
-    private long countOrders(String status) {
-        return orders.findAll().stream()
-                .filter(order -> status.equals(order.status))
-                .count();
+    private Map<String, Long> orderFunnel(java.util.List<PrintOrder> allOrders) {
+        Map<String, Long> funnel = new LinkedHashMap<>();
+        for (String status : java.util.List.of("SUBMITTED", "REVIEWING", "QUOTED", "JOB_READY", "IN_PRODUCTION", "PRODUCTION_DONE", "DELIVERING", "DONE", "REFUNDED", "CANCELLED")) {
+            funnel.put(status, allOrders.stream().filter(order -> status.equals(order.status)).count());
+        }
+        return funnel;
+    }
+
+    private BigDecimal sumPayments(java.util.List<PaymentRecord> allPayments, String status) {
+        return allPayments.stream()
+                .filter(payment -> status.equals(payment.status))
+                .map(payment -> payment.amount == null ? BigDecimal.ZERO : payment.amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private Map<String, Object> storeStats(java.util.List<PrintOrder> storeOrders) {
+        return Map.of(
+                "orderCount", storeOrders.size(),
+                "completedCount", storeOrders.stream().filter(order -> "DONE".equals(order.status)).count(),
+                "quotedAmount", storeOrders.stream()
+                        .map(order -> order.totalAmount == null ? BigDecimal.ZERO : order.totalAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
     }
 
     private boolean isLowStock(InventoryItem item) {

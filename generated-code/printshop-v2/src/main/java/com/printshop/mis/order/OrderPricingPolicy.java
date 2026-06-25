@@ -84,4 +84,15 @@ public class OrderPricingPolicy {
             throw new BusinessException(HttpStatus.BAD_REQUEST, label + "必须大于 0。");
         }
     }
+
+    public void validateOrderNumbers(Integer pageCount, Integer copies) {
+        validatePositive(pageCount, "页数");
+        validatePositive(copies, "份数");
+        if (pageCount > 5000) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "页数不能超过 5000。");
+        }
+        if (copies > 10000) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "份数不能超过 10000。");
+        }
+    }
 }

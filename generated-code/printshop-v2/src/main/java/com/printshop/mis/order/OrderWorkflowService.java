@@ -91,6 +91,7 @@ public class OrderWorkflowService {
                     "step", "订单已提交门店审核"
             ));
             case "QUOTE" -> quickQuote(username, orderId);
+            case "CONFIRM_QUOTE" -> confirmLatestQuotation(username, orderId);
             case "JOB_TICKET" -> quickJobTicket(username, orderId);
             case "SCHEDULE_PRODUCTION" -> quickProductionTask(username, orderId);
             case "COMPLETE_PRODUCTION" -> productionTaskService.completeProductionTask(username, latestProductionTask(orderId).id);
@@ -120,6 +121,9 @@ public class OrderWorkflowService {
         }
         if (workflowPolicy.available(username, order, "QUOTE")) {
             addAction(actions, "QUOTE", "生成报价", "按订单规格生成报价");
+        }
+        if (workflowPolicy.available(username, order, "CONFIRM_QUOTE")) {
+            addAction(actions, "CONFIRM_QUOTE", "确认报价", "确认报价后才能收款和生成作业单");
         }
         if (workflowPolicy.available(username, order, "JOB_TICKET")) {
             addAction(actions, "JOB_TICKET", "生成作业单", "把报价转为生产作业单");
@@ -176,6 +180,7 @@ public class OrderWorkflowService {
         requireRole(username, Set.of("CLERK", "MANAGER", "ADMIN"), "生成作业单");
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
         statusPolicy.requireStatus(order, Set.of(OrderStatusPolicy.QUOTED), "生成作业单", "生成报价");
+        requireConfirmedQuotation(order.id, "生成作业单");
         Quotation quotation = latestQuotation(order.id);
         JobTicket request = new JobTicket();
         request.orderId = order.id;
@@ -242,6 +247,7 @@ public class OrderWorkflowService {
                 OrderStatusPolicy.DELIVERING,
                 OrderStatusPolicy.DONE
         ), "登记收款", "生成报价");
+        requireConfirmedQuotation(order.id, "登记收款");
         PaymentRecord request = new PaymentRecord();
         request.orderId = order.id;
         BigDecimal unpaid = amount(order).subtract(order.paidAmount == null ? BigDecimal.ZERO : order.paidAmount);
@@ -272,6 +278,7 @@ public class OrderWorkflowService {
             orderService.changeOrderStatus(username, orderId, Map.of("status", OrderStatusPolicy.REVIEWING, "step", "管理员已提交审核"));
         }
         result.put("quotation", quickQuote(username, orderId));
+        result.put("quoteConfirmed", confirmLatestQuotation(username, orderId));
         result.put("jobTicket", quickJobTicket(username, orderId));
         result.put("productionTask", quickProductionTask(username, orderId));
         ProductionTask production = (ProductionTask) result.get("productionTask");
@@ -321,6 +328,20 @@ public class OrderWorkflowService {
 
     private Quotation latestQuotation(Long orderId) {
         return quotations.findByOrderIdOrderByCreatedAtDesc(orderId).stream().findFirst().orElse(null);
+    }
+
+    private Quotation confirmLatestQuotation(String username, Long orderId) {
+        Quotation quotation = latestQuotation(orderId);
+        if (quotation == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单没有可确认的报价。");
+        }
+        return quotationService.confirmQuotation(username, quotation.id);
+    }
+
+    private void requireConfirmedQuotation(Long orderId, String action) {
+        if (!workflowPolicy.hasConfirmedQuotation(orderId)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "不能执行“" + action + "”：请先由客户确认报价。");
+        }
     }
 
     private BigDecimal amount(PrintOrder order) {

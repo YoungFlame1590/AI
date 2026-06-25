@@ -56,6 +56,7 @@ export const actionRoles = {
   submitReview: ["CUSTOMER", "CLERK", "MANAGER", "ADMIN"],
   startProduction: ["MANAGER", "OPS", "ADMIN"],
   quote: ["CLERK", "MANAGER", "ADMIN"],
+  confirmQuote: ["CUSTOMER", "ADMIN"],
   jobTicket: ["CLERK", "MANAGER", "ADMIN"],
   productionTask: ["MANAGER", "OPS", "ADMIN"],
   deliveryTask: ["OPS", "ADMIN"],
@@ -120,7 +121,10 @@ export const modules = {
       ["validUntil", "有效期"],
     ],
     columns: ["quoteNo", "orderId", "finalAmount", "discountRate", "status"],
-    actions: [["审批通过", "POST", (id) => `/api/quotations/${id}/approve`]],
+    actions: [
+      ["审批通过", "POST", (id) => `/api/quotations/${id}/approve`],
+      ["客户确认", "POST", (id) => `/api/quotations/${id}/confirm`, {}, "confirmQuote"],
+    ],
   },
   jobTickets: {
     title: "作业单",

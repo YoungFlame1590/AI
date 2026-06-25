@@ -45,8 +45,8 @@ export function estimateOrderAmount(order) {
   const colorMode = normalizeOptionValue(order.colorMode) || orderOptions.colorMode[0];
   const deliveryMode = normalizeOptionValue(order.deliveryMode) || orderOptions.deliveryMode[0];
   const priority = normalizeOptionValue(order.priority) || "普通";
-  const pageCount = Math.max(1, Number(order.pageCount || 1));
-  const copies = Math.max(1, Number(order.copies || 1));
+  const pageCount = Math.max(1, Math.trunc(Number(order.pageCount || 1)));
+  const copies = Math.max(1, Math.trunc(Number(order.copies || 1)));
   const variable = pageCount * copies * (priceConfig.colorPageRate[colorMode] || 0);
   const base = (priceConfig.productBase[productType] || 0) + variable;
   const total = base * (priceConfig.priorityMultiplier[priority] || 1) + (priceConfig.deliveryFee[deliveryMode] || 0);

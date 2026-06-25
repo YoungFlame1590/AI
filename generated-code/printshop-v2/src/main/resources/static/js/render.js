@@ -49,6 +49,10 @@ export function renderMetrics(metrics) {
 
 export function renderTable(customColumns, customTitle) {
   const config = activeRecordConfig();
+  if (state.module === "reports") {
+    renderReportIndex();
+    return;
+  }
   const columns = customColumns || (state.module === "dashboard" ? dashboardOrderColumns : config.columns) || [];
   el.tableTitle.textContent = customTitle || (state.module === "dashboard" ? "最近订单" : config.title);
   if (!state.records.length) {
@@ -86,7 +90,7 @@ export function renderForm(handlers) {
   el.recordForm.innerHTML = "";
   el.recordActions.innerHTML = "";
   if (state.module === "reports") {
-    el.recordForm.innerHTML = "<p>报表结果见最近响应。</p>";
+    renderReportDetail(record);
     return;
   }
   for (const [field, label, type, options] of config.fields || []) {
@@ -178,8 +182,115 @@ export function renderTimeline(audits = []) {
 
 export function format(value) {
   if (value === null || value === undefined) return "-";
+  if (typeof value === "object") return JSON.stringify(value);
   if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
   return String(value);
+}
+
+function renderReportIndex() {
+  const report = state.records[0] || {};
+  const operations = report.operations || {};
+  const finance = report.finance || {};
+  const lowStock = report.lowStock || [];
+  const productionLoad = report.productionLoad || [];
+  const rows = [
+    ["订单总数", operations.totalOrders ?? 0],
+    ["已完成订单", operations.completedOrders ?? 0],
+    ["活跃订单", operations.activeOrders ?? 0],
+    ["收款笔数", finance.paymentCount ?? 0],
+    ["已开票数", finance.issuedInvoiceCount ?? 0],
+    ["低库存物料", Array.isArray(lowStock) ? lowStock.length : 0],
+    ["生产任务", Array.isArray(productionLoad) ? productionLoad.length : 0],
+  ];
+  el.tableTitle.textContent = "报表摘要";
+  el.tableWrap.innerHTML = `
+    <table>
+      <thead><tr><th>指标</th><th>数值</th></tr></thead>
+      <tbody>${rows.map(([label, value]) => `<tr><td>${label}</td><td>${format(value)}</td></tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+function renderReportDetail(report = {}) {
+  el.detailTitle.textContent = "经营报表详情";
+  el.recordActions.innerHTML = "";
+  const operations = report.operations || {};
+  const finance = report.finance || {};
+  const lowStock = Array.isArray(report.lowStock) ? report.lowStock : [];
+  const productionLoad = Array.isArray(report.productionLoad) ? report.productionLoad : [];
+  el.recordForm.innerHTML = `
+    <section class="aggregate-summary wide">
+      <div><span>订单总数</span><strong>${format(operations.totalOrders ?? 0)}</strong></div>
+      <div><span>已完成</span><strong>${format(operations.completedOrders ?? 0)}</strong></div>
+      <div><span>活跃订单</span><strong>${format(operations.activeOrders ?? 0)}</strong></div>
+      <div><span>收款金额</span><strong>${format(finance.paidAmount ?? 0)}</strong></div>
+      <div><span>退款金额</span><strong>${format(finance.refundAmount ?? 0)}</strong></div>
+      <div><span>已开票</span><strong>${format(finance.issuedInvoiceCount ?? 0)}</strong></div>
+    </section>
+    ${reportObjectTable("订单漏斗", report.orderFunnel, ["状态", "数量"])}
+    ${reportObjectTable("财务摘要", finance, ["指标", "数值"])}
+    ${reportObjectTable("运营摘要", operations, ["指标", "数值"])}
+    ${storeSummaryTable(report.storeSummary)}
+    ${reportArrayTable("生产负载", productionLoad, ["taskNo", "station", "operatorName", "status", "progressPercent"])}
+    ${reportArrayTable("低库存预警", lowStock, ["sku", "itemName", "category", "quantity", "safetyStock"])}
+  `;
+  renderTimeline([]);
+}
+
+function reportObjectTable(title, object = {}, headers = ["项目", "数值"]) {
+  const entries = Object.entries(object || {});
+  if (!entries.length) {
+    return `<section class="aggregate-section wide"><h3>${title}</h3><p class="empty">暂无${title}数据</p></section>`;
+  }
+  return `
+    <section class="aggregate-section wide">
+      <h3>${title}</h3>
+      <table>
+        <thead><tr><th>${headers[0]}</th><th>${headers[1]}</th></tr></thead>
+        <tbody>${entries.map(([key, value]) => `<tr><td>${key}</td><td>${format(value)}</td></tr>`).join("")}</tbody>
+      </table>
+    </section>
+  `;
+}
+
+function storeSummaryTable(summary = {}) {
+  const entries = Object.entries(summary || {});
+  if (!entries.length) {
+    return `<section class="aggregate-section wide"><h3>门店汇总</h3><p class="empty">暂无门店汇总数据</p></section>`;
+  }
+  return `
+    <section class="aggregate-section wide">
+      <h3>门店汇总</h3>
+      <table>
+        <thead><tr><th>门店</th><th>订单数</th><th>完成数</th><th>报价金额</th></tr></thead>
+        <tbody>
+          ${entries.map(([storeName, stats]) => `
+            <tr>
+              <td>${storeName}</td>
+              <td>${format(stats.orderCount ?? 0)}</td>
+              <td>${format(stats.completedCount ?? 0)}</td>
+              <td>${format(stats.quotedAmount ?? 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </section>
+  `;
+}
+
+function reportArrayTable(title, items = [], columns = []) {
+  if (!items.length) {
+    return `<section class="aggregate-section wide"><h3>${title}</h3><p class="empty">暂无${title}数据</p></section>`;
+  }
+  return `
+    <section class="aggregate-section wide">
+      <h3>${title}</h3>
+      <table>
+        <thead><tr>${columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead>
+        <tbody>${items.slice(0, 8).map((item) => `<tr>${columns.map((column) => `<td>${format(item[column])}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    </section>
+  `;
 }
 
 function aggregateSection(title, items = [], columns = []) {
@@ -265,7 +376,11 @@ function createFieldNode(field, type, options = [], value = "") {
   node.value = value ?? "";
   if (type === "number") {
     node.type = "number";
-    node.step = "0.01";
+    node.step = ["pageCount", "copies"].includes(field) ? "1" : "0.01";
+    if (["pageCount", "copies"].includes(field)) {
+      node.min = "1";
+      node.max = field === "pageCount" ? "5000" : "10000";
+    }
   }
   return node;
 }

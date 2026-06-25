@@ -107,6 +107,11 @@ Step "店员生成报价" {
     Assert-Equal $response.data.status "SENT" "报价状态错误"
 }
 
+Step "客户确认报价" {
+    $response = Invoke-Json "POST" "/api/orders/$($order.id)/workflow/actions/CONFIRM_QUOTE" "customer" @{}
+    Assert-Equal $response.data.result.status "CUSTOMER_CONFIRMED" "客户确认报价失败"
+}
+
 Step "处理中订单直接修改被拒绝" {
     Expect-Failure {
         Invoke-Json "PUT" "/api/orders/$($order.id)" "customer" @{
@@ -185,6 +190,8 @@ Step "审计报表统计" {
     Assert-True ($audit.data.Count -ge 10) "审计日志不足"
     $reports = Invoke-Json "GET" "/api/reports" "admin"
     Assert-True ($null -ne $reports.data.orderFunnel) "报表缺少订单漏斗"
+    Assert-True ($reports.data.operations.totalOrders -ge 1) "报表未统计订单总数"
+    Assert-True ($reports.data.finance.paymentCount -ge 1) "报表未统计收款记录"
     $stats = Invoke-Json "GET" "/stats" "admin"
     Assert-True ($stats.totalRequests -gt 0) "/stats 未统计调用"
 }

@@ -54,6 +54,7 @@ public class ProductionTaskService {
         PrintOrder order = orders.findById(ticket.orderId).orElseThrow(() -> notFound("订单", ticket.orderId));
         statusPolicy.requireStatus(order, java.util.Set.of(OrderStatusPolicy.JOB_READY), "排产任务", "生成作业单");
         changeGuard.requireNoPendingChange(order, "排产任务");
+        inventoryService.assertAvailableForProduction(order.productType, order.colorMode, order.pageCount, order.copies);
         ProductionTask task = new ProductionTask();
         task.taskNo = text(request.taskNo, code("PRO"));
         task.jobTicketId = request.jobTicketId;

@@ -4,6 +4,8 @@ import com.printshop.common.exception.BusinessException;
 import com.printshop.mis.domain.PrintOrder;
 import com.printshop.mis.finance.FinanceService;
 import com.printshop.mis.identity.IdentityService;
+import com.printshop.mis.quotation.QuotationService;
+import com.printshop.mis.repository.QuotationRepository;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -14,11 +16,13 @@ public class OrderWorkflowPolicy {
     private final IdentityService identityService;
     private final OrderChangeGuard changeGuard;
     private final FinanceService financeService;
+    private final QuotationRepository quotations;
 
-    public OrderWorkflowPolicy(IdentityService identityService, OrderChangeGuard changeGuard, FinanceService financeService) {
+    public OrderWorkflowPolicy(IdentityService identityService, OrderChangeGuard changeGuard, FinanceService financeService, QuotationRepository quotations) {
         this.identityService = identityService;
         this.changeGuard = changeGuard;
         this.financeService = financeService;
+        this.quotations = quotations;
     }
 
     public boolean available(String username, PrintOrder order, String action) {
@@ -30,7 +34,12 @@ public class OrderWorkflowPolicy {
                     && !Set.of(OrderStatusPolicy.DONE, OrderStatusPolicy.REFUNDED, OrderStatusPolicy.CANCELLED).contains(order.status)
                     && !frozen;
             case "QUOTE" -> Set.of("CLERK", "ADMIN").contains(role) && OrderStatusPolicy.REVIEWING.equals(order.status);
-            case "JOB_TICKET" -> Set.of("CLERK", "ADMIN").contains(role) && OrderStatusPolicy.QUOTED.equals(order.status);
+            case "CONFIRM_QUOTE" -> Set.of("CUSTOMER", "ADMIN").contains(role)
+                    && OrderStatusPolicy.QUOTED.equals(order.status)
+                    && latestQuoteNeedsConfirmation(order.id);
+            case "JOB_TICKET" -> Set.of("CLERK", "ADMIN").contains(role)
+                    && OrderStatusPolicy.QUOTED.equals(order.status)
+                    && hasConfirmedQuotation(order.id);
             case "SCHEDULE_PRODUCTION" -> Set.of("OPS", "ADMIN").contains(role)
                     && OrderStatusPolicy.JOB_READY.equals(order.status)
                     && !frozen;
@@ -63,7 +72,7 @@ public class OrderWorkflowPolicy {
     }
 
     public boolean canPay(PrintOrder order) {
-        return Set.of(
+        return hasConfirmedQuotation(order.id) && Set.of(
                 OrderStatusPolicy.QUOTED,
                 OrderStatusPolicy.JOB_READY,
                 OrderStatusPolicy.IN_PRODUCTION,
@@ -71,5 +80,17 @@ public class OrderWorkflowPolicy {
                 OrderStatusPolicy.DELIVERING,
                 OrderStatusPolicy.DONE
         ).contains(order.status) && !"PAID".equals(order.paymentStatus) && !"REFUNDED".equals(order.paymentStatus);
+    }
+
+    public boolean hasConfirmedQuotation(Long orderId) {
+        return quotations.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+                .anyMatch(quotation -> QuotationService.CUSTOMER_CONFIRMED.equals(quotation.status));
+    }
+
+    private boolean latestQuoteNeedsConfirmation(Long orderId) {
+        return quotations.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+                .findFirst()
+                .map(quotation -> Set.of(QuotationService.SENT, QuotationService.APPROVED).contains(quotation.status))
+                .orElse(false);
     }
 }

@@ -149,6 +149,7 @@ class PrintshopV1ApplicationTests {
         mockMvc.perform(post("/api/orders/{id}/workflow/quote", courierOrderId)
                         .with(httpBasic("clerk", "demo123")))
                 .andExpect(status().isOk());
+        confirmQuote(courierOrderId);
         mockMvc.perform(post("/api/orders/{id}/workflow/job-ticket", courierOrderId)
                         .with(httpBasic("clerk", "demo123")))
                 .andExpect(status().isOk());
@@ -479,6 +480,7 @@ class PrintshopV1ApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.orderId").value(orderId))
                 .andExpect(jsonPath("$.data.status").value("SENT"));
+        confirmQuote(orderId);
 
         mockMvc.perform(post("/api/orders/{id}/workflow/job-ticket", orderId)
                         .with(httpBasic("clerk", "demo123")))
@@ -631,6 +633,7 @@ class PrintshopV1ApplicationTests {
         mockMvc.perform(post("/api/orders/{id}/workflow/quote", orderId)
                         .with(httpBasic("clerk", "demo123")))
                 .andExpect(status().isOk());
+        confirmQuote(orderId);
 
         mockMvc.perform(put("/api/orders/{id}", orderId)
                         .with(httpBasic("customer", "demo123"))
@@ -722,5 +725,13 @@ class PrintshopV1ApplicationTests {
                 .findFirst()
                 .map(item -> new BigDecimal(String.valueOf(item.get("quantity"))))
                 .orElseThrow();
+    }
+
+    private void confirmQuote(Integer orderId) throws Exception {
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "CONFIRM_QUOTE")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
     }
 }

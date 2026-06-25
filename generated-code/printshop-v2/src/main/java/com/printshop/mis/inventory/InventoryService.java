@@ -5,12 +5,14 @@ import static com.printshop.mis.shared.MisSupport.notFound;
 import static com.printshop.mis.shared.MisSupport.text;
 
 import com.printshop.mis.audit.AuditTrailService;
+import com.printshop.common.exception.BusinessException;
 import com.printshop.mis.domain.InventoryItem;
 import com.printshop.mis.repository.InventoryItemRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,16 +74,41 @@ public class InventoryService {
 
     public void consumeForProduction(String username, String productType, String colorMode, Integer pageCount, Integer copies) {
         ensureDefaultInventory();
+        Map<String, BigDecimal> required = requiredMaterials(productType, colorMode, pageCount, copies);
+        assertEnough(required);
+        required.forEach((sku, quantity) -> consume(username, sku, quantity));
+    }
+
+    public void assertAvailableForProduction(String productType, String colorMode, Integer pageCount, Integer copies) {
+        ensureDefaultInventory();
+        assertEnough(requiredMaterials(productType, colorMode, pageCount, copies));
+    }
+
+    private Map<String, BigDecimal> requiredMaterials(String productType, String colorMode, Integer pageCount, Integer copies) {
         int safePages = Math.max(1, pageCount == null ? 1 : pageCount);
         int safeCopies = Math.max(1, copies == null ? 1 : copies);
-        BigDecimal paperQty = BigDecimal.valueOf((long) safePages * safeCopies);
-        String paperSku = Set.of("名片快印", "海报写真", "写真展板").contains(productType) ? "PAPER-COATED-300G" : "PAPER-A4-80G";
-        consume(username, paperSku, paperQty);
+        Map<String, BigDecimal> required = new java.util.LinkedHashMap<>();
+        String paperSku = Set.of("名片快印", "海报写真", "写真展板").contains(productType)
+                ? "PAPER-COATED-300G"
+                : "PAPER-A4-80G";
+        required.merge(paperSku, BigDecimal.valueOf((long) safePages * safeCopies), BigDecimal::add);
         if (!"黑白".equals(colorMode)) {
-            consume(username, "INK-COLOR", BigDecimal.valueOf(safeCopies));
+            required.merge("INK-COLOR", BigDecimal.valueOf(safeCopies), BigDecimal::add);
         }
-        if (Set.of("论文胶装", "培训手册", "装订加覆膜").contains(productType) || "装订加覆膜".equals(colorMode)) {
-            consume(username, "BINDING-CONSUMABLE", BigDecimal.valueOf(safeCopies));
+        if (Set.of("论文胶装", "培训手册").contains(productType) || "装订加覆膜".equals(colorMode)) {
+            required.merge("BINDING-CONSUMABLE", BigDecimal.valueOf(safeCopies), BigDecimal::add);
+        }
+        return required;
+    }
+
+    private void assertEnough(Map<String, BigDecimal> required) {
+        for (Map.Entry<String, BigDecimal> entry : required.entrySet()) {
+            InventoryItem item = inventoryItems.findBySku(entry.getKey()).orElseThrow(() -> notFound("库存物料", -1L));
+            if (item.quantity == null || item.quantity.compareTo(entry.getValue()) < 0) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST,
+                        "库存不足，无法排产：" + item.itemName + " 需要 " + entry.getValue().toPlainString()
+                                + item.unit + "，当前仅 " + (item.quantity == null ? "0" : item.quantity.toPlainString()) + item.unit + "。");
+            }
         }
     }
 
@@ -101,6 +128,9 @@ public class InventoryService {
 
     private void consume(String username, String sku, BigDecimal quantity) {
         InventoryItem item = inventoryItems.findBySku(sku).orElseThrow(() -> notFound("库存物料", -1L));
+        if (item.quantity == null || item.quantity.compareTo(quantity) < 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "库存不足，不能扣减：" + item.itemName);
+        }
         item.quantity = item.quantity.subtract(quantity);
         audit.record(username, "INV", "CONSUME_INVENTORY", "INVENTORY", item.id, sku + " -" + quantity.toPlainString());
         inventoryItems.save(item);

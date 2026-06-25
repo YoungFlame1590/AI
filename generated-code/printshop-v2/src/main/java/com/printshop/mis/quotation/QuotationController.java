@@ -48,6 +48,11 @@ public class QuotationController {
         return api.ok(quotationService.approveQuotation(principal.getName(), id));
     }
 
+    @PostMapping("/api/quotations/{id}/confirm")
+    public ApiResponse<?> confirmQuotation(Principal principal, @PathVariable Long id) {
+        return api.ok(quotationService.confirmQuotation(principal.getName(), id));
+    }
+
     @DeleteMapping("/api/quotations/{id}")
     public ApiResponse<?> deleteQuotation(Principal principal, @PathVariable Long id) {
         return api.ok(quotationService.deleteQuotation(principal.getName(), id));

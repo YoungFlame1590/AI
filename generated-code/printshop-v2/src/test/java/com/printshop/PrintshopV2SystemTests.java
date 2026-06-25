@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -131,6 +132,60 @@ class PrintshopV2SystemTests {
                                 }
                                 """))
                 .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/orders")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productType": "论文胶装",
+                                  "colorMode": "黑白",
+                                  "pageCount": 1,
+                                  "copies": 10001,
+                                  "deliveryMode": "到店自提",
+                                  "priority": "普通"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("份数不能超过")));
+    }
+
+    @Test
+    void shouldRequireQuoteConfirmationAndBlockProductionWhenInventoryIsInsufficient() throws Exception {
+        MvcResult order = createOrder("customer", "论文胶装", "黑白", 20, 3, "到店自提", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+
+        mockMvc.perform(post("/api/orders/{id}/status", orderId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"REVIEWING\",\"step\":\"客户已提交审核\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/orders/{id}/workflow/quote", orderId)
+                        .with(httpBasic("clerk", "demo123")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/orders/{id}/workflow/job-ticket", orderId)
+                        .with(httpBasic("clerk", "demo123")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("客户确认报价")));
+
+        confirmQuote(orderId);
+        mockMvc.perform(post("/api/orders/{id}/workflow/job-ticket", orderId)
+                        .with(httpBasic("clerk", "demo123")))
+                .andExpect(status().isOk());
+
+        Integer paperId = inventoryItemId("PAPER-A4-80G");
+        BigDecimal paperQuantity = inventoryQuantity("PAPER-A4-80G");
+        mockMvc.perform(post("/api/inventory-items/{id}/adjust", paperId)
+                        .with(httpBasic("admin", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"delta\":-%s}".formatted(paperQuantity.toPlainString())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/orders/{id}/workflow/production-task", orderId)
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("库存不足")));
     }
 
     @Test
@@ -327,6 +382,13 @@ class PrintshopV2SystemTests {
                 .andExpect(jsonPath("$.data.result.quoteNo").exists())
                 .andExpect(jsonPath("$.data.nextTasks").exists());
 
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "CONFIRM_QUOTE")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.status").value("CUSTOMER_CONFIRMED"));
+
         mockMvc.perform(get("/api/workbench/tasks").with(httpBasic("manager", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.tasks.length()").value(0));
@@ -473,6 +535,15 @@ class PrintshopV2SystemTests {
         mockMvc.perform(post("/api/orders/{id}/workflow/quote", orderId)
                         .with(httpBasic("clerk", "demo123")))
                 .andExpect(status().isOk());
+        confirmQuote(orderId);
+    }
+
+    private void confirmQuote(Integer orderId) throws Exception {
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "CONFIRM_QUOTE")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
     }
 
     private void progressToDelivery(Integer orderId) throws Exception {
@@ -491,5 +562,31 @@ class PrintshopV2SystemTests {
         mockMvc.perform(post("/api/orders/{id}/workflow/delivery-task", orderId)
                         .with(httpBasic("ops", "demo123")))
                 .andExpect(status().isOk());
+    }
+
+    private BigDecimal inventoryQuantity(String sku) throws Exception {
+        MvcResult inventory = mockMvc.perform(get("/api/inventory-items")
+                        .with(httpBasic("admin", "demo123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        java.util.List<java.util.Map<String, Object>> items = JsonPath.read(inventory.getResponse().getContentAsString(), "$.data");
+        return items.stream()
+                .filter(item -> sku.equals(item.get("sku")))
+                .findFirst()
+                .map(item -> new BigDecimal(String.valueOf(item.get("quantity"))))
+                .orElseThrow();
+    }
+
+    private Integer inventoryItemId(String sku) throws Exception {
+        MvcResult inventory = mockMvc.perform(get("/api/inventory-items")
+                        .with(httpBasic("admin", "demo123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        java.util.List<java.util.Map<String, Object>> items = JsonPath.read(inventory.getResponse().getContentAsString(), "$.data");
+        return items.stream()
+                .filter(item -> sku.equals(item.get("sku")))
+                .findFirst()
+                .map(item -> Integer.valueOf(String.valueOf(item.get("id"))))
+                .orElseThrow();
     }
 }

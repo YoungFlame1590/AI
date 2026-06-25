@@ -80,8 +80,7 @@ public class OrderService {
         order.colorMode = pricing.normalizeOption(text(request.colorMode, "黑白"), OrderPricingPolicy.COLOR_MODES, "颜色/工艺");
         order.pageCount = number(request.pageCount, 1);
         order.copies = number(request.copies, 1);
-        pricing.validatePositive(order.pageCount, "页数");
-        pricing.validatePositive(order.copies, "份数");
+        pricing.validateOrderNumbers(order.pageCount, order.copies);
         order.dueAt = text(request.dueAt, DISPLAY_TIME.format(timestamp));
         order.deliveryMode = pricing.normalizeOption(text(request.deliveryMode, "到店自提"), OrderPricingPolicy.DELIVERY_MODES, "交付方式");
         order.priority = pricing.normalizeOption(text(request.priority, "普通"), OrderPricingPolicy.PRIORITIES, "优先级");
@@ -209,11 +208,11 @@ public class OrderService {
             order.colorMode = pricing.normalizeOption(request.colorMode, OrderPricingPolicy.COLOR_MODES, "颜色/工艺");
         }
         if (allowed.contains("pageCount") && request.pageCount != null) {
-            pricing.validatePositive(request.pageCount, "页数");
+            pricing.validateOrderNumbers(request.pageCount, request.copies == null ? order.copies : request.copies);
             order.pageCount = request.pageCount;
         }
         if (allowed.contains("copies") && request.copies != null) {
-            pricing.validatePositive(request.copies, "份数");
+            pricing.validateOrderNumbers(request.pageCount == null ? order.pageCount : request.pageCount, request.copies);
             order.copies = request.copies;
         }
         if (allowed.contains("dueAt") && request.dueAt != null) {

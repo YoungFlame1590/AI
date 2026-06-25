@@ -213,7 +213,7 @@ paths:
     post:
       tags: [Order]
       summary: 统一订单工作流动作入口
-      description: 统一承接提交审核、报价、作业单、排产、完工、配送、签收、收款、开票、退款和申请变更等动作；旧快捷接口保留兼容。INVOICE 对客户表示申请发票，对财务/管理员表示处理开票；REFUND 对客户表示申请退款，对财务/管理员表示处理退款。重复开票、重复收款、重复退款或状态不允许时返回 400。
+      description: 统一承接提交审核、报价、客户确认报价、作业单、排产、完工、配送、签收、收款、开票、退款和申请变更等动作；旧快捷接口保留兼容。CONFIRM_QUOTE 表示客户确认最新报价，JOB_TICKET 和 PAY 必须在报价确认后才能执行。INVOICE 对客户表示申请发票，对财务/管理员表示处理开票；REFUND 对客户表示申请退款，对财务/管理员表示处理退款。重复开票、重复收款、重复退款或状态不允许时返回 400。排产前会检查纸张、彩色耗材和装订耗材库存，不足时返回 400。
       parameters:
         - name: orderId
           in: path
@@ -226,7 +226,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [SUBMIT_REVIEW, QUOTE, JOB_TICKET, SCHEDULE_PRODUCTION, COMPLETE_PRODUCTION, CREATE_DELIVERY, ACCEPT_DELIVERY, SIGN_DELIVERY, PAY, INVOICE, REFUND, REQUEST_CHANGE]
+            enum: [SUBMIT_REVIEW, QUOTE, CONFIRM_QUOTE, JOB_TICKET, SCHEDULE_PRODUCTION, COMPLETE_PRODUCTION, CREATE_DELIVERY, ACCEPT_DELIVERY, SIGN_DELIVERY, PAY, INVOICE, REFUND, REQUEST_CHANGE]
       requestBody:
         required: false
         content:
@@ -443,6 +443,20 @@ paths:
       responses:
         '200':
           description: 审批后的报价
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+  /api/quotations/{id}/confirm:
+    post:
+      tags: [Quotation]
+      summary: 客户确认报价
+      description: 客户或管理员确认最新报价。确认后报价状态变为 CUSTOMER_CONFIRMED，订单才能继续收款或生成作业单；重复确认或非可确认状态返回 400。
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: 已确认的报价
           content:
             application/json:
               schema:
@@ -981,7 +995,7 @@ paths:
       summary: 经营报表
       responses:
         '200':
-          description: 订单漏斗、生产负载、低库存与财务摘要
+          description: 订单漏斗、生产负载、低库存、门店汇总、运营摘要与财务摘要。报表直接聚合当前订单、付款、发票、生产和库存数据，完成订单后会体现在订单漏斗、运营摘要和财务统计中。
           content:
             application/json:
               schema:
@@ -1149,7 +1163,9 @@ components:
         title: { type: string }
         taxNo: { type: string }
         amount: { type: number }
-        status: { type: string }
+        status:
+          type: string
+          enum: [WAITING, ISSUED]
         issuedAt: { type: string }
     PaymentRecord:
       type: object
@@ -1159,7 +1175,9 @@ components:
         orderId: { type: integer, format: int64 }
         amount: { type: number }
         method: { type: string }
-        status: { type: string }
+        status:
+          type: string
+          enum: [SUCCESS, REFUND_REQUESTED, REFUNDED]
         paidAt: { type: string }
     OrderChangeRequestInput:
       type: object

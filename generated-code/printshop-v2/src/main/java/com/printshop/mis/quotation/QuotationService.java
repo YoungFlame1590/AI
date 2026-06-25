@@ -16,12 +16,20 @@ import com.printshop.mis.order.OrderStatusPolicy;
 import com.printshop.mis.repository.QuotationRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
+import com.printshop.common.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
 public class QuotationService {
+
+    public static final String SENT = "SENT";
+    public static final String PENDING_APPROVAL = "PENDING_APPROVAL";
+    public static final String APPROVED = "APPROVED";
+    public static final String CUSTOMER_CONFIRMED = "CUSTOMER_CONFIRMED";
 
     private final IdentityService identityService;
     private final OrderService orderService;
@@ -47,7 +55,7 @@ public class QuotationService {
         quotation.subtotal = money(request.subtotal);
         quotation.discountRate = request.discountRate == null ? BigDecimal.ONE : request.discountRate;
         quotation.finalAmount = request.finalAmount == null ? quotation.subtotal.multiply(quotation.discountRate) : request.finalAmount;
-        quotation.status = quotation.discountRate.compareTo(new BigDecimal("0.95")) < 0 ? "PENDING_APPROVAL" : "SENT";
+        quotation.status = quotation.discountRate.compareTo(new BigDecimal("0.95")) < 0 ? PENDING_APPROVAL : SENT;
         quotation.validUntil = text(request.validUntil, "7天内有效");
         quotation.createdAt = now();
         order.status = "QUOTED";
@@ -82,10 +90,37 @@ public class QuotationService {
 
     public Quotation approveQuotation(String username, Long id) {
         Quotation quotation = getQuotation(id);
-        quotation.status = "APPROVED";
+        quotation.status = APPROVED;
         quotation.approvedBy = identityService.requireUser(username).displayName;
         audit.record(username, "QUO", "APPROVE_QUOTATION", "QUOTATION", id, quotation.quoteNo);
         return quotations.save(quotation);
+    }
+
+    public Quotation confirmQuotation(String username, Long id) {
+        Quotation quotation = getQuotation(id);
+        PrintOrder order = orderService.requireVisibleOrder(username, quotation.orderId);
+        String role = identityService.requireUser(username).role;
+        if (!Set.of("CUSTOMER", "ADMIN").contains(role)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "只有客户可以确认报价。");
+        }
+        if (!Set.of(SENT, APPROVED, CUSTOMER_CONFIRMED).contains(quotation.status)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "当前报价状态不能确认：" + quotation.status);
+        }
+        if (CUSTOMER_CONFIRMED.equals(quotation.status)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该报价已确认，不能重复确认。");
+        }
+        quotation.status = CUSTOMER_CONFIRMED;
+        order.currentStep = "客户已确认报价，等待收款或生成作业单";
+        order.updatedAt = now();
+        orderService.saveOrder(order);
+        audit.record(username, "QUO", "CONFIRM_QUOTATION", "QUOTATION", id, quotation.quoteNo);
+        return quotations.save(quotation);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasConfirmedQuotation(Long orderId) {
+        return quotations.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+                .anyMatch(quotation -> CUSTOMER_CONFIRMED.equals(quotation.status));
     }
 
     public Quotation deleteQuotation(String username, Long id) {
