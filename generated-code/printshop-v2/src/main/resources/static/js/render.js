@@ -119,7 +119,8 @@ export function renderForm(handlers) {
       addAction("删除", handlers.deleteRecord, "danger");
     }
   }
-  for (const [label, method, pathFactory, body, actionKey] of config.actions || []) {
+  const showManagementActions = state.module !== "orders" || state.user?.role === "ADMIN";
+  for (const [label, method, pathFactory, body, actionKey] of showManagementActions ? (config.actions || []) : []) {
     if (state.selected?.id && !state.editing) {
       if (actionKey && !(actionRoles[actionKey] || []).includes(state.user?.role)) {
         continue;
@@ -136,6 +137,7 @@ export function renderForm(handlers) {
 export function renderAggregateDetail(handlers) {
   const aggregate = state.aggregate || {};
   const order = aggregate.order || {};
+  const nextTask = (aggregate.nextTasks || [])[0];
   el.detailTitle.textContent = order.orderNo ? `订单聚合详情 · ${order.orderNo}` : "订单聚合详情";
   el.recordForm.innerHTML = `
     <section class="aggregate-summary wide">
@@ -145,14 +147,9 @@ export function renderAggregateDetail(handlers) {
       <div><span>金额</span><strong>${format(order.totalAmount)}</strong></div>
       <div><span>产品</span><strong>${format(order.productType)} / ${format(order.colorMode)}</strong></div>
       <div><span>交付</span><strong>${format(order.deliveryMode)} · ${format(order.priority)}</strong></div>
+      <div class="wide"><span>下一步建议</span><strong>${nextTask ? `${format(nextTask.label)} · ${format(nextTask.hint)}` : "暂无待办，等待其他角色处理"}</strong></div>
     </section>
-    ${aggregateSection("报价", aggregate.quotations, ["quoteNo", "finalAmount", "status"])}
-    ${aggregateSection("作业单", aggregate.jobTickets, ["ticketNo", "paperType", "binding", "status"])}
-    ${aggregateSection("生产", aggregate.productionTasks, ["taskNo", "station", "status", "progressPercent"])}
-    ${aggregateSection("配送", aggregate.deliveryTasks, ["taskNo", "mode", "carrierName", "status"])}
-    ${aggregateSection("财务", [...(aggregate.payments || []), ...(aggregate.invoices || [])], ["paymentNo", "invoiceNo", "amount", "status"])}
-    ${aggregateSection("变更", aggregate.changeRequests, ["requestNo", "requestedBy", "status", "amountDelta"])}
-    ${aggregateSection("文件", aggregate.files, ["fileName", "fileStatus", "uploadedAt"])}
+    ${aggregateSectionsForRole(aggregate)}
   `;
   el.recordActions.innerHTML = "";
   for (const action of aggregate.nextTasks || []) {
@@ -197,6 +194,50 @@ function aggregateSection(title, items = [], columns = []) {
         <tbody>
           ${items.slice(0, 6).map((item) => `<tr>${columns.map((column) => `<td>${format(item[column])}</td>`).join("")}</tr>`).join("")}
         </tbody>
+      </table>
+    </section>
+  `;
+}
+
+function aggregateSectionsForRole(aggregate) {
+  const role = state.user?.role;
+  const financeItems = [...(aggregate.payments || []), ...(aggregate.invoices || [])];
+  const allSections = {
+    progress: progressSection(aggregate),
+    quotations: aggregateSection("报价", aggregate.quotations, ["quoteNo", "finalAmount", "status"]),
+    jobTickets: aggregateSection("作业单", aggregate.jobTickets, ["ticketNo", "paperType", "binding", "status"]),
+    productionTasks: aggregateSection("生产", aggregate.productionTasks, ["taskNo", "station", "status", "progressPercent"]),
+    deliveryTasks: aggregateSection("配送", aggregate.deliveryTasks, ["taskNo", "mode", "carrierName", "status"]),
+    finance: aggregateSection("财务", financeItems, ["paymentNo", "invoiceNo", "amount", "status"]),
+    changeRequests: aggregateSection("变更", aggregate.changeRequests, ["requestNo", "requestedBy", "status", "amountDelta"]),
+    files: aggregateSection("文件", aggregate.files, ["fileName", "fileStatus", "uploadedAt"]),
+  };
+  const visible = {
+    CUSTOMER: ["progress", "files", "changeRequests", "finance"],
+    CLERK: ["files", "quotations", "jobTickets", "changeRequests"],
+    MANAGER: ["quotations", "changeRequests", "productionTasks", "progress"],
+    OPS: ["productionTasks", "deliveryTasks", "progress"],
+    FINANCE: ["finance", "changeRequests", "progress"],
+    COURIER: ["deliveryTasks", "progress"],
+    ADMIN: Object.keys(allSections),
+  }[role] || ["progress"];
+  return visible.map((key) => allSections[key]).join("");
+}
+
+function progressSection(aggregate) {
+  const order = aggregate.order || {};
+  const items = [
+    { label: "当前步骤", value: order.currentStep },
+    { label: "报价数", value: (aggregate.quotations || []).length },
+    { label: "作业单数", value: (aggregate.jobTickets || []).length },
+    { label: "生产任务数", value: (aggregate.productionTasks || []).length },
+    { label: "配送任务数", value: (aggregate.deliveryTasks || []).length },
+  ];
+  return `
+    <section class="aggregate-section wide">
+      <h3>进度</h3>
+      <table>
+        <tbody>${items.map((item) => `<tr><th>${item.label}</th><td>${format(item.value)}</td></tr>`).join("")}</tbody>
       </table>
     </section>
   `;

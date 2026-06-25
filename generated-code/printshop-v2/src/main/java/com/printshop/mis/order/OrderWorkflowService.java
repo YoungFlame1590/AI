@@ -113,21 +113,21 @@ public class OrderWorkflowService {
         if ("CUSTOMER".equals(role) && OrderStatusPolicy.SUBMITTED.equals(order.status)) {
             addAction(actions, "SUBMIT_REVIEW", "提交审核", "订单进入门店文件审核");
         }
-        if (Set.of("CUSTOMER", "CLERK", "MANAGER", "ADMIN").contains(role)
+        if (Set.of("CUSTOMER", "CLERK", "ADMIN").contains(role)
                 && !Set.of(OrderStatusPolicy.DONE, OrderStatusPolicy.REFUNDED, OrderStatusPolicy.CANCELLED).contains(order.status)
                 && !frozen) {
-            addAction(actions, "REQUEST_CHANGE", "申请变更", "创建订单变更请求并冻结生产/SLA");
+            addAction(actions, "REQUEST_CHANGE", "申请订单变更", "创建订单变更请求并冻结生产/SLA");
         }
-        if (Set.of("CLERK", "MANAGER", "ADMIN").contains(role) && OrderStatusPolicy.REVIEWING.equals(order.status)) {
+        if (Set.of("CLERK", "ADMIN").contains(role) && OrderStatusPolicy.REVIEWING.equals(order.status)) {
             addAction(actions, "QUOTE", "生成报价", "按订单规格生成报价");
         }
-        if (Set.of("CLERK", "MANAGER", "ADMIN").contains(role) && OrderStatusPolicy.QUOTED.equals(order.status)) {
+        if (Set.of("CLERK", "ADMIN").contains(role) && OrderStatusPolicy.QUOTED.equals(order.status)) {
             addAction(actions, "JOB_TICKET", "生成作业单", "把报价转为生产作业单");
         }
-        if (Set.of("MANAGER", "OPS", "ADMIN").contains(role) && OrderStatusPolicy.JOB_READY.equals(order.status) && !frozen) {
+        if (Set.of("OPS", "ADMIN").contains(role) && OrderStatusPolicy.JOB_READY.equals(order.status) && !frozen) {
             addAction(actions, "SCHEDULE_PRODUCTION", "排产", "生成生产任务");
         }
-        if (Set.of("MANAGER", "OPS", "ADMIN").contains(role) && OrderStatusPolicy.IN_PRODUCTION.equals(order.status) && !frozen) {
+        if (Set.of("OPS", "ADMIN").contains(role) && OrderStatusPolicy.IN_PRODUCTION.equals(order.status) && !frozen) {
             addAction(actions, "COMPLETE_PRODUCTION", "完工质检", "完成生产并通过质检");
         }
         if (Set.of("OPS", "ADMIN").contains(role) && OrderStatusPolicy.PRODUCTION_DONE.equals(order.status) && !frozen) {
@@ -140,9 +140,13 @@ public class OrderWorkflowService {
         if (Set.of("FINANCE", "ADMIN").contains(role) && canPay(order)) {
             addAction(actions, "PAY", "登记收款", "按未收金额登记收款");
         }
-        if (Set.of("CUSTOMER", "FINANCE", "ADMIN").contains(role) && "PAID".equals(order.paymentStatus)) {
-            addAction(actions, "INVOICE", "生成发票", "创建发票申请");
-            addAction(actions, "REFUND", "生成退款", "生成原路退款记录");
+        if ("CUSTOMER".equals(role) && "PAID".equals(order.paymentStatus)) {
+            addAction(actions, "INVOICE", "申请发票", "提交发票申请，等待财务处理");
+            addAction(actions, "REFUND", "申请退款", "提交退款申请，等待财务复核");
+        }
+        if (Set.of("FINANCE", "ADMIN").contains(role) && "PAID".equals(order.paymentStatus)) {
+            addAction(actions, "INVOICE", "开票", "处理发票申请并生成发票记录");
+            addAction(actions, "REFUND", "处理退款", "生成原路退款记录");
         }
         return actions;
     }

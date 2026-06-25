@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: 图文快印门店连锁管理系统 Print MIS API
   version: 2.2.0
-  description: 准生产版 v2 接口契约，在 v2.1 变更冻结基础上追加统一工作流动作、角色任务工作台和订单聚合详情。
+  description: 准生产版 v2 接口契约，在 v2.1 变更冻结基础上追加统一工作流动作、角色任务工作台和订单聚合详情；普通角色推荐通过工作台和聚合详情完成日常操作，旧 CRUD/API 保留兼容。
 servers:
   - url: http://127.0.0.1:8080
 security:
@@ -67,7 +67,7 @@ paths:
     get:
       tags: [Dashboard]
       summary: 当前角色任务工作台
-      description: 从订单状态、变更请求、生产、配送和财务记录实时派生待办任务，不新增任务表。
+      description: 从订单状态、变更请求、生产、配送和财务记录实时派生待办任务，不新增任务表；任务文案按客户、门店、审批、运营、财务和管理职责收敛。
       responses:
         '200':
           description: 指标、待办任务和最近订单
@@ -194,7 +194,7 @@ paths:
     get:
       tags: [Order]
       summary: 订单聚合详情
-      description: 返回订单、报价、作业单、生产、配送、财务、变更、文件和可执行下一步动作；客户和配送角色不返回审计时间线。
+      description: 返回订单、报价、作业单、生产、配送、财务、变更、文件和可执行下一步动作；前端按角色裁剪可见区块，客户和配送角色不返回审计时间线。
       parameters:
         - name: orderId
           in: path

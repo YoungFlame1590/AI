@@ -333,6 +333,10 @@ tr.selected {
   padding: 8px 10px;
 }
 
+.aggregate-summary .wide {
+  grid-column: 1 / -1;
+}
+
 .aggregate-summary span,
 .aggregate-section h3 {
   color: var(--muted);

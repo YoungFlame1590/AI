@@ -327,6 +327,10 @@ class PrintshopV2SystemTests {
                 .andExpect(jsonPath("$.data.result.quoteNo").exists())
                 .andExpect(jsonPath("$.data.nextTasks").exists());
 
+        mockMvc.perform(get("/api/workbench/tasks").with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tasks.length()").value(0));
+
         mockMvc.perform(get("/api/orders/{orderId}/aggregate", orderId)
                         .with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk())

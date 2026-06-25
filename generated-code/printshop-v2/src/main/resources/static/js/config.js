@@ -269,11 +269,11 @@ export const modules = {
 export const dashboardOrderColumns = ["orderNo", "customerName", "productType", "status", "currentStep"];
 
 export const roleModules = {
-  CUSTOMER: ["dashboard", "orders", "orderChangeRequests", "invoices", "payments"],
-  CLERK: ["dashboard", "orders", "orderChangeRequests", "quotations", "jobTickets", "inventoryItems", "audits"],
-  MANAGER: ["dashboard", "orders", "orderChangeRequests", "quotations", "jobTickets", "productionTasks", "inventoryItems", "audits", "reports"],
-  OPS: ["dashboard", "orders", "productionTasks", "inventoryItems", "deliveryTasks", "audits", "reports"],
-  FINANCE: ["dashboard", "orders", "invoices", "payments", "audits", "reports"],
-  COURIER: ["dashboard", "orders", "deliveryTasks"],
+  CUSTOMER: ["dashboard", "orders"],
+  CLERK: ["dashboard", "orders", "quotations", "jobTickets", "inventoryItems"],
+  MANAGER: ["dashboard", "orderChangeRequests", "quotations", "productionTasks", "inventoryItems", "reports"],
+  OPS: ["dashboard", "productionTasks", "inventoryItems", "deliveryTasks", "reports"],
+  FINANCE: ["dashboard", "invoices", "payments", "reports"],
+  COURIER: ["dashboard", "deliveryTasks"],
   ADMIN: Object.keys(modules),
 };
