@@ -135,6 +135,7 @@ async function clearBusinessData() {
 }
 
 async function runRecordAction(method, path, body) {
+  if (requiresConfirmation(path) && !confirm("这是不可逆业务动作，确认继续执行？")) return;
   if (body === "__changeRequestFromOrder") {
     body = buildOrderChangeRequestBody();
   }
@@ -144,6 +145,7 @@ async function runRecordAction(method, path, body) {
 }
 
 async function runWorkflowAction(action, orderId, body = {}) {
+  if (requiresWorkflowConfirmation(action) && !confirm("这是不可逆业务动作，确认继续执行？")) return;
   if (action === "REQUEST_CHANGE") {
     body = buildOrderChangeRequestBody();
   }
@@ -199,6 +201,14 @@ function buildOrderChangeRequestBody() {
     priority: order.priority === "加急" ? "普通" : "加急",
     reason: "客户/店员申请处理中订单规格或时效变更",
   };
+}
+
+function requiresWorkflowConfirmation(action) {
+  return ["COMPLETE_PRODUCTION", "SIGN_DELIVERY", "INVOICE", "REFUND"].includes(action);
+}
+
+function requiresConfirmation(path) {
+  return /\/(issue|refund|sign)$/.test(path) || path.includes("/workflow/invoice") || path.includes("/workflow/refund");
 }
 
 async function uploadOrderFile() {

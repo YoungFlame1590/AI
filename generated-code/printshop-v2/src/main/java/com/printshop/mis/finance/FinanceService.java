@@ -16,13 +16,23 @@ import com.printshop.mis.order.OrderService;
 import com.printshop.mis.order.OrderStatusPolicy;
 import com.printshop.mis.repository.InvoiceRecordRepository;
 import com.printshop.mis.repository.PaymentRecordRepository;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
+import com.printshop.common.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
 public class FinanceService {
+
+    private static final String INVOICE_WAITING = "WAITING";
+    private static final String INVOICE_ISSUED = "ISSUED";
+    private static final String PAYMENT_SUCCESS = "SUCCESS";
+    private static final String REFUND_REQUESTED = "REFUND_REQUESTED";
+    private static final String REFUNDED = "REFUNDED";
 
     private final OrderService orderService;
     private final OrderStatusPolicy statusPolicy;
@@ -43,15 +53,51 @@ public class FinanceService {
     public InvoiceRecord createInvoice(String username, InvoiceRecord request) {
         PrintOrder order = orderService.requireVisibleOrder(username, request.orderId);
         statusPolicy.requirePaid(order, "生成发票");
+        requireNoRefundRecord(order.id, "开票");
+        requireNoActiveInvoice(order.id);
         InvoiceRecord invoice = new InvoiceRecord();
         invoice.invoiceNo = text(request.invoiceNo, code("INV"));
         invoice.orderId = request.orderId;
         invoice.title = text(request.title, "个人");
         invoice.taxNo = text(request.taxNo, "个人无需税号");
         invoice.amount = money(request.amount);
-        invoice.status = "WAITING";
+        invoice.status = INVOICE_WAITING;
         audit.record(username, "FIN", "CREATE_INVOICE", "INVOICE", invoice.orderId, invoice.title);
         return invoices.save(invoice);
+    }
+
+    public InvoiceRecord createOrIssueInvoiceForOrder(String username, Long orderId) {
+        PrintOrder order = orderService.requireVisibleOrder(username, orderId);
+        statusPolicy.requirePaid(order, "生成发票");
+        requireNoRefundRecord(order.id, "开票");
+        UserAccount user = identityService.requireUser(username);
+        List<InvoiceRecord> active = activeInvoices(order.id);
+        if ("CUSTOMER".equals(user.role)) {
+            if (!active.isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已存在发票记录，不能重复申请。");
+            }
+            InvoiceRecord request = new InvoiceRecord();
+            request.orderId = order.id;
+            request.title = order.customerName;
+            request.amount = order.totalAmount;
+            return createInvoice(username, request);
+        }
+        requireFinanceWriter(username, "开票");
+        return active.stream()
+                .filter(invoice -> INVOICE_WAITING.equals(invoice.status))
+                .findFirst()
+                .map(invoice -> issueInvoice(username, invoice.id))
+                .orElseGet(() -> {
+                    if (active.stream().anyMatch(invoice -> INVOICE_ISSUED.equals(invoice.status))) {
+                        throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已开票，不能重复开票。");
+                    }
+                    InvoiceRecord request = new InvoiceRecord();
+                    request.orderId = order.id;
+                    request.title = order.customerName;
+                    request.amount = order.totalAmount;
+                    InvoiceRecord invoice = createInvoice(username, request);
+                    return issueInvoice(username, invoice.id);
+                });
     }
 
     @Transactional(readOnly = true)
@@ -75,9 +121,13 @@ public class FinanceService {
     }
 
     public InvoiceRecord issueInvoice(String username, Long id) {
+        requireFinanceWriter(username, "开票");
         InvoiceRecord invoice = getInvoice(id);
+        if (INVOICE_ISSUED.equals(invoice.status)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该发票已开具，不能重复开票。");
+        }
         invoice.taxNo = text(invoice.taxNo, "个人无需税号");
-        invoice.status = "ISSUED";
+        invoice.status = INVOICE_ISSUED;
         invoice.issuedAt = now().toString();
         audit.record(username, "FIN", "ISSUE_INVOICE", "INVOICE", id, invoice.invoiceNo);
         return invoices.save(invoice);
@@ -101,12 +151,26 @@ public class FinanceService {
                 OrderStatusPolicy.DELIVERING,
                 OrderStatusPolicy.DONE
         ), "登记收款", "生成报价");
+        if ("PAID".equals(order.paymentStatus)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已付清，不能重复登记收款。");
+        }
+        if (REFUNDED.equals(order.paymentStatus) || OrderStatusPolicy.REFUNDED.equals(order.status)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已退款，不能登记收款。");
+        }
+        BigDecimal unpaid = order.totalAmount.subtract(order.paidAmount == null ? BigDecimal.ZERO : order.paidAmount);
+        BigDecimal amount = money(request.amount);
+        if (amount.signum() <= 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "收款金额必须大于 0。");
+        }
+        if (amount.compareTo(unpaid) > 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "收款金额不能超过未收金额。");
+        }
         PaymentRecord payment = new PaymentRecord();
         payment.paymentNo = text(request.paymentNo, code("PAY"));
         payment.orderId = request.orderId;
-        payment.amount = money(request.amount);
+        payment.amount = amount;
         payment.method = text(request.method, "微信");
-        payment.status = "SUCCESS";
+        payment.status = PAYMENT_SUCCESS;
         payment.paidAt = now().toString();
         order.paidAmount = order.paidAmount.add(payment.amount);
         order.paymentStatus = order.paidAmount.compareTo(order.totalAmount) >= 0 ? "PAID" : "PARTIAL";
@@ -124,20 +188,39 @@ public class FinanceService {
     public PaymentRecord createRefundForOrder(String username, Long orderId) {
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
         statusPolicy.requirePaid(order, "生成退款");
+        ensureRefundAllowed(order);
+        UserAccount user = identityService.requireUser(username);
         PaymentRecord refund = new PaymentRecord();
         refund.paymentNo = code("REF");
         refund.orderId = order.id;
         refund.amount = order.paidAmount == null || order.paidAmount.signum() <= 0 ? order.totalAmount : order.paidAmount;
         refund.method = "原路退款";
-        refund.status = "REFUNDED";
+        refund.status = Set.of("FINANCE", "ADMIN").contains(user.role) ? REFUNDED : REFUND_REQUESTED;
         refund.paidAt = now().toString();
-        order.paymentStatus = "REFUNDED";
-        order.status = "REFUNDED";
-        order.currentStep = "退款记录已生成，等待财务复核";
+        if (REFUNDED.equals(refund.status)) {
+            order.paymentStatus = REFUNDED;
+            order.status = OrderStatusPolicy.REFUNDED;
+            order.currentStep = "退款已处理完成";
+        } else {
+            order.currentStep = "退款申请已提交，等待财务复核";
+        }
         order.updatedAt = now();
         orderService.saveOrder(order);
         audit.record(username, "FIN", "CREATE_REFUND", "PAYMENT", order.id, refund.amount.toPlainString());
         return payments.save(refund);
+    }
+
+    public PaymentRecord requestOrProcessRefundForOrder(String username, Long orderId) {
+        PrintOrder order = orderService.requireVisibleOrder(username, orderId);
+        statusPolicy.requirePaid(order, "生成退款");
+        UserAccount user = identityService.requireUser(username);
+        if (Set.of("FINANCE", "ADMIN").contains(user.role)) {
+            return payments.findByOrderIdAndStatusIn(order.id, Set.of(REFUND_REQUESTED)).stream()
+                    .findFirst()
+                    .map(request -> refundPayment(username, request.id))
+                    .orElseGet(() -> createRefundForOrder(username, orderId));
+        }
+        return createRefundForOrder(username, orderId);
     }
 
     @Transactional(readOnly = true)
@@ -163,7 +246,22 @@ public class FinanceService {
     public PaymentRecord refundPayment(String username, Long id) {
         requireFinanceWriter(username, "退款");
         PaymentRecord payment = getPayment(id);
-        payment.status = "REFUNDED";
+        if (REFUNDED.equals(payment.status)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该退款已处理，不能重复退款。");
+        }
+        PrintOrder order = orderService.requireVisibleOrder(username, payment.orderId);
+        if (OrderStatusPolicy.REFUNDED.equals(order.status) || REFUNDED.equals(order.paymentStatus)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已退款，不能重复退款。");
+        }
+        if (!Set.of(PAYMENT_SUCCESS, REFUND_REQUESTED).contains(payment.status)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "当前付款记录状态不能退款：" + payment.status);
+        }
+        payment.status = REFUNDED;
+        order.paymentStatus = REFUNDED;
+        order.status = OrderStatusPolicy.REFUNDED;
+        order.currentStep = "退款已处理完成";
+        order.updatedAt = now();
+        orderService.saveOrder(order);
         audit.record(username, "FIN", "REFUND_PAYMENT", "PAYMENT", id, payment.paymentNo);
         return payments.save(payment);
     }
@@ -180,6 +278,61 @@ public class FinanceService {
         UserAccount user = identityService.requireUser(username);
         if (!java.util.Set.of("FINANCE", "ADMIN").contains(user.role)) {
             throw new com.printshop.common.exception.BusinessException(org.springframework.http.HttpStatus.FORBIDDEN, "当前角色不能执行“" + action + "”。");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActiveInvoice(Long orderId) {
+        return !activeInvoices(orderId).isEmpty();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasWaitingInvoice(Long orderId) {
+        return !invoices.findByOrderIdAndStatusIn(orderId, Set.of(INVOICE_WAITING)).isEmpty();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasIssuedInvoice(Long orderId) {
+        return !invoices.findByOrderIdAndStatusIn(orderId, Set.of(INVOICE_ISSUED)).isEmpty();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasRefundRecord(Long orderId) {
+        return !payments.findByOrderIdAndStatusIn(orderId, Set.of(REFUND_REQUESTED, REFUNDED)).isEmpty();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasRefundRequest(Long orderId) {
+        return !payments.findByOrderIdAndStatusIn(orderId, Set.of(REFUND_REQUESTED)).isEmpty();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasRefundedPayment(Long orderId) {
+        return !payments.findByOrderIdAndStatusIn(orderId, Set.of(REFUNDED)).isEmpty();
+    }
+
+    private void requireNoActiveInvoice(Long orderId) {
+        if (hasActiveInvoice(orderId)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已存在发票记录，不能重复申请或开票。");
+        }
+    }
+
+    private void requireNoRefundRecord(Long orderId, String action) {
+        if (hasRefundRecord(orderId)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已存在退款申请或退款记录，不能" + action + "。");
+        }
+    }
+
+    private List<InvoiceRecord> activeInvoices(Long orderId) {
+        return invoices.findByOrderIdAndStatusIn(orderId, Set.of(INVOICE_WAITING, INVOICE_ISSUED));
+    }
+
+    private void ensureRefundAllowed(PrintOrder order) {
+        if (OrderStatusPolicy.REFUNDED.equals(order.status) || REFUNDED.equals(order.paymentStatus)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已退款，不能重复退款。");
+        }
+        if (hasRefundRecord(order.id)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单已存在退款申请或退款记录，不能重复退款。");
         }
     }
 }

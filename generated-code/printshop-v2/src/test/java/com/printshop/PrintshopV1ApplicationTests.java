@@ -555,6 +555,17 @@ class PrintshopV1ApplicationTests {
         mockMvc.perform(post("/api/orders/{id}/workflow/refund", orderId)
                         .with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REFUND_REQUESTED"));
+
+        mockMvc.perform(get("/api/orders/{id}", orderId)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DONE"))
+                .andExpect(jsonPath("$.data.paymentStatus").value("PAID"));
+
+        mockMvc.perform(post("/api/orders/{id}/workflow/refund", orderId)
+                        .with(httpBasic("finance", "demo123")))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("REFUNDED"));
 
         mockMvc.perform(get("/api/orders/{id}", orderId)

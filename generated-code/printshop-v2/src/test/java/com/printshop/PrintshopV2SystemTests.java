@@ -354,6 +354,97 @@ class PrintshopV2SystemTests {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void shouldPreventRepeatedFinanceWorkflowActions() throws Exception {
+        MvcResult order = createOrder("customer", "培训手册", "彩色", 12, 2, "同城配送", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+        progressToDelivery(orderId);
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "PAY")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.order.paymentStatus").value("PAID"));
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "PAY")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "INVOICE")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.status").value("WAITING"));
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "INVOICE")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        MvcResult issued = mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "INVOICE")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.status").value("ISSUED"))
+                .andReturn();
+        String issuedAt = JsonPath.read(issued.getResponse().getContentAsString(), "$.data.result.issuedAt");
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "INVOICE")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        Integer invoiceId = JsonPath.read(issued.getResponse().getContentAsString(), "$.data.result.id");
+        mockMvc.perform(post("/api/invoices/{id}/issue", invoiceId)
+                        .with(httpBasic("finance", "demo123")))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/invoices/{id}", invoiceId)
+                        .with(httpBasic("finance", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.issuedAt").value(issuedAt));
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "REFUND")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.status").value("REFUND_REQUESTED"))
+                .andExpect(jsonPath("$.data.order.status").value("DELIVERING"));
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "REFUND")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "REFUND")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.result.status").value("REFUNDED"))
+                .andExpect(jsonPath("$.data.order.status").value("REFUNDED"));
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "REFUND")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "PAY")
+                        .with(httpBasic("finance", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
     private MvcResult createOrder(String username, String productType, String colorMode, int pageCount, int copies, String deliveryMode, String priority) throws Exception {
         return mockMvc.perform(post("/api/orders")
                         .with(httpBasic(username, "demo123"))

@@ -213,7 +213,7 @@ paths:
     post:
       tags: [Order]
       summary: 统一订单工作流动作入口
-      description: 统一承接提交审核、报价、作业单、排产、完工、配送、签收、收款、开票、退款和申请变更等动作；旧快捷接口保留兼容。
+      description: 统一承接提交审核、报价、作业单、排产、完工、配送、签收、收款、开票、退款和申请变更等动作；旧快捷接口保留兼容。INVOICE 对客户表示申请发票，对财务/管理员表示处理开票；REFUND 对客户表示申请退款，对财务/管理员表示处理退款。重复开票、重复收款、重复退款或状态不允许时返回 400。
       parameters:
         - name: orderId
           in: path
@@ -795,6 +795,7 @@ paths:
     post:
       tags: [Finance]
       summary: 创建发票申请
+      description: 创建 WAITING 发票记录；同一订单已有 WAITING 或 ISSUED 发票时返回 400，避免重复申请或重复开票。
       requestBody:
         required: true
         content:
@@ -855,6 +856,7 @@ paths:
     post:
       tags: [Finance]
       summary: 开具发票
+      description: 将 WAITING 发票改为 ISSUED 并写入 issuedAt；已 ISSUED 发票再次调用返回 400。
       parameters:
         - $ref: '#/components/parameters/id'
       responses:
@@ -878,6 +880,7 @@ paths:
     post:
       tags: [Finance]
       summary: 新增收款
+      description: 登记实际收款；已 PAID/REFUNDED 订单或金额超过未收金额时返回 400。
       requestBody:
         required: true
         content:
@@ -938,6 +941,7 @@ paths:
     post:
       tags: [Finance]
       summary: 退款
+      description: 财务处理退款记录；已 REFUNDED 或状态不允许的付款记录再次调用返回 400。
       parameters:
         - $ref: '#/components/parameters/id'
       responses:

@@ -40,6 +40,7 @@ public class OrderWorkflowService {
     private final FinanceService financeService;
     private final IdentityService identityService;
     private final OrderStatusPolicy statusPolicy;
+    private final OrderWorkflowPolicy workflowPolicy;
     private final OrderChangeGuard changeGuard;
     private final OrderChangeRequestService changeRequestService;
     private final QuotationRepository quotations;
@@ -56,6 +57,7 @@ public class OrderWorkflowService {
             FinanceService financeService,
             IdentityService identityService,
             OrderStatusPolicy statusPolicy,
+            OrderWorkflowPolicy workflowPolicy,
             OrderChangeGuard changeGuard,
             OrderChangeRequestService changeRequestService,
             QuotationRepository quotations,
@@ -71,6 +73,7 @@ public class OrderWorkflowService {
         this.financeService = financeService;
         this.identityService = identityService;
         this.statusPolicy = statusPolicy;
+        this.workflowPolicy = workflowPolicy;
         this.changeGuard = changeGuard;
         this.changeRequestService = changeRequestService;
         this.quotations = quotations;
@@ -81,6 +84,7 @@ public class OrderWorkflowService {
 
     public Map<String, Object> executeAction(String username, Long orderId, String action, Map<String, Object> payload) {
         String normalized = action == null ? "" : action.trim().replace('-', '_').toUpperCase();
+        workflowPolicy.requireAvailable(username, orderService.requireVisibleOrder(username, orderId), normalized);
         Object result = switch (normalized) {
             case "SUBMIT_REVIEW" -> orderService.changeOrderStatus(username, orderId, Map.of(
                     "status", OrderStatusPolicy.REVIEWING,
@@ -107,46 +111,50 @@ public class OrderWorkflowService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> nextActions(String username, Long orderId) {
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
-        String role = identityService.requireUser(username).role;
-        boolean frozen = changeGuard.hasPendingChange(order.id);
         List<Map<String, Object>> actions = new ArrayList<>();
-        if ("CUSTOMER".equals(role) && OrderStatusPolicy.SUBMITTED.equals(order.status)) {
+        if (workflowPolicy.available(username, order, "SUBMIT_REVIEW")) {
             addAction(actions, "SUBMIT_REVIEW", "提交审核", "订单进入门店文件审核");
         }
-        if (Set.of("CUSTOMER", "CLERK", "ADMIN").contains(role)
-                && !Set.of(OrderStatusPolicy.DONE, OrderStatusPolicy.REFUNDED, OrderStatusPolicy.CANCELLED).contains(order.status)
-                && !frozen) {
+        if (workflowPolicy.available(username, order, "REQUEST_CHANGE")) {
             addAction(actions, "REQUEST_CHANGE", "申请订单变更", "创建订单变更请求并冻结生产/SLA");
         }
-        if (Set.of("CLERK", "ADMIN").contains(role) && OrderStatusPolicy.REVIEWING.equals(order.status)) {
+        if (workflowPolicy.available(username, order, "QUOTE")) {
             addAction(actions, "QUOTE", "生成报价", "按订单规格生成报价");
         }
-        if (Set.of("CLERK", "ADMIN").contains(role) && OrderStatusPolicy.QUOTED.equals(order.status)) {
+        if (workflowPolicy.available(username, order, "JOB_TICKET")) {
             addAction(actions, "JOB_TICKET", "生成作业单", "把报价转为生产作业单");
         }
-        if (Set.of("OPS", "ADMIN").contains(role) && OrderStatusPolicy.JOB_READY.equals(order.status) && !frozen) {
+        if (workflowPolicy.available(username, order, "SCHEDULE_PRODUCTION")) {
             addAction(actions, "SCHEDULE_PRODUCTION", "排产", "生成生产任务");
         }
-        if (Set.of("OPS", "ADMIN").contains(role) && OrderStatusPolicy.IN_PRODUCTION.equals(order.status) && !frozen) {
+        if (workflowPolicy.available(username, order, "COMPLETE_PRODUCTION")) {
             addAction(actions, "COMPLETE_PRODUCTION", "完工质检", "完成生产并通过质检");
         }
-        if (Set.of("OPS", "ADMIN").contains(role) && OrderStatusPolicy.PRODUCTION_DONE.equals(order.status) && !frozen) {
+        if (workflowPolicy.available(username, order, "CREATE_DELIVERY")) {
             addAction(actions, "CREATE_DELIVERY", "生成配送", "创建配送/外协任务");
         }
-        if ("COURIER".equals(role) && OrderStatusPolicy.DELIVERING.equals(order.status)) {
+        if (workflowPolicy.available(username, order, "ACCEPT_DELIVERY")) {
             addAction(actions, "ACCEPT_DELIVERY", "接受配送", "承接待分配配送任务");
             addAction(actions, "SIGN_DELIVERY", "签收", "登记客户签收");
         }
-        if (Set.of("FINANCE", "ADMIN").contains(role) && canPay(order)) {
+        if (workflowPolicy.available(username, order, "PAY")) {
             addAction(actions, "PAY", "登记收款", "按未收金额登记收款");
         }
-        if ("CUSTOMER".equals(role) && "PAID".equals(order.paymentStatus)) {
+        if (workflowPolicy.available(username, order, "INVOICE")) {
+            String role = identityService.requireUser(username).role;
+            if ("CUSTOMER".equals(role)) {
             addAction(actions, "INVOICE", "申请发票", "提交发票申请，等待财务处理");
-            addAction(actions, "REFUND", "申请退款", "提交退款申请，等待财务复核");
+            } else {
+                addAction(actions, "INVOICE", "开票", "处理发票申请并生成发票记录");
+            }
         }
-        if (Set.of("FINANCE", "ADMIN").contains(role) && "PAID".equals(order.paymentStatus)) {
-            addAction(actions, "INVOICE", "开票", "处理发票申请并生成发票记录");
-            addAction(actions, "REFUND", "处理退款", "生成原路退款记录");
+        if (workflowPolicy.available(username, order, "REFUND")) {
+            String role = identityService.requireUser(username).role;
+            if ("CUSTOMER".equals(role)) {
+            addAction(actions, "REFUND", "申请退款", "提交退款申请，等待财务复核");
+            } else {
+                addAction(actions, "REFUND", "处理退款", "生成原路退款记录");
+            }
         }
         return actions;
     }
@@ -246,18 +254,14 @@ public class OrderWorkflowService {
         requireRole(username, Set.of("CUSTOMER", "FINANCE", "ADMIN"), "生成退款");
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
         statusPolicy.requirePaid(order, "生成退款");
-        return financeService.createRefundForOrder(username, orderId);
+        return financeService.requestOrProcessRefundForOrder(username, orderId);
     }
 
     public InvoiceRecord quickInvoice(String username, Long orderId) {
         requireRole(username, Set.of("CUSTOMER", "FINANCE", "ADMIN"), "生成发票");
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
         statusPolicy.requirePaid(order, "生成发票");
-        InvoiceRecord request = new InvoiceRecord();
-        request.orderId = order.id;
-        request.title = order.customerName;
-        request.amount = amount(order);
-        return financeService.createInvoice(username, request);
+        return financeService.createOrIssueInvoiceForOrder(username, order.id);
     }
 
     public Map<String, Object> quickFullFlow(String username, Long orderId) {
@@ -294,17 +298,6 @@ public class OrderWorkflowService {
         item.put("label", label);
         item.put("hint", hint);
         actions.add(item);
-    }
-
-    private boolean canPay(PrintOrder order) {
-        return Set.of(
-                OrderStatusPolicy.QUOTED,
-                OrderStatusPolicy.JOB_READY,
-                OrderStatusPolicy.IN_PRODUCTION,
-                OrderStatusPolicy.PRODUCTION_DONE,
-                OrderStatusPolicy.DELIVERING,
-                OrderStatusPolicy.DONE
-        ).contains(order.status) && !"PAID".equals(order.paymentStatus) && !"REFUNDED".equals(order.paymentStatus);
     }
 
     private ProductionTask latestProductionTask(Long orderId) {
