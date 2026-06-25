@@ -21,6 +21,9 @@ This repository has two main work areas:
   - `mis/identity`, `mis/order`, `mis/quotation`, `mis/job`, `mis/production`, `mis/inventory`, `mis/delivery`, `mis/finance`, `mis/audit`, `mis/reporting`, `mis/dashboard`: module controllers and services.
   - `src/main/resources/db/migration/`: Flyway schema and seven demo accounts.
   - `src/main/resources/static/js/`: no-build ES module frontend (`config`, `state`, `api`, `orders`, `render`, `main`) served by Spring Boot at `/`.
+- `generated-code/printshop-v2/`: v2 demand-change management application copied from v1 and extended for `CR-001 订单变更冻结`.
+  - Adds order change request entity, repository, service, controller, Flyway `V5__order_change_requests.sql`, frontend `orderChangeRequests` module, and `scripts/verify-change-regression.js`.
+  - Outputs change-management artifacts under `obsidian-vault/wiki/summaries/变更管理/` and baseline `obsidian-vault/wiki/baselines/BL-20260624-01/`.
 
 Root-level `启动需求获取页面.bat` is the main local launcher.
 Root-level `启动n8n-Docker.bat`, `一键启动n8n工作流.bat`, and `一键CCB审批.bat` support the n8n workflow.
@@ -84,6 +87,19 @@ Run v1 design drift verification:
 node generated-code\printshop-v1\scripts\verify-design-drift.js --check
 ```
 
+Build and verify the v2 change-management app:
+
+```powershell
+cd generated-code\printshop-v2
+mvn test
+mvn package
+Get-ChildItem src\main\resources\static\js -Filter *.js | ForEach-Object { node --check $_.FullName }
+node scripts\verify-change-regression.js --write
+node scripts\verify-change-regression.js --check
+```
+
+v2 uses a separate MySQL database from v1: container `printshop-v2-mysql`, port `13307`, database `printshop_v2`. Do not point v2 at v1's `printshop_v1` schema, or Flyway validation will fail because the v1 migration history has different checksums.
+
 Run the generated v1 app and open its frontend:
 
 ```powershell
@@ -135,6 +151,8 @@ For behavior changes, verify the local page at `http://127.0.0.1:8000`. A1/A2 wr
 For v1 frontend work, keep the no-build static approach. The main page is a role-oriented Print MIS business system, not a raw endpoint console. Users log in with the seeded accounts (`customer`, `clerk`, `manager`, `ops`, `finance`, `courier`, `admin`, password `demo123`) and use module navigation for orders, files, quotations, job tickets, production tasks, inventory, delivery tasks, invoices, payments, audit logs, reports, and `/stats`. Business seed data should stay empty by default; keep only base stores, default inventory, and the seven accounts. Admin-only `DELETE /api/admin/business-data` clears generated business data while preserving those accounts and default inventory. Order-detail quick workflow actions may generate quotation, job ticket, production, delivery, payment, refund, and invoice records from the selected order, but must still enforce role permissions. Couriers accept and sign delivery tasks; they must not generate delivery tasks or manage order files. Audit logs are read-only.
 
 For v1 design verification, keep the four-drift scope: architecture responsibility, dependency topology, API contract, and requirement/role coverage. The current contract is `obsidian-vault/wiki/summaries/API契约/OpenAPI-接口契约-v2.0.yaml`. Use `--write` only when intentionally regenerating `RCR逆向校验报告-v1.0.md`, `模块设计质量校验-v1.0.md`, or ADR-002~004.
+
+For v2 change-management work, keep `generated-code/printshop-v1/` intact and make incremental changes under `generated-code/printshop-v2/`. CR-001 must route processed-order specification changes through `/api/orders/{orderId}/change-requests`; direct `PUT /api/orders/{id}` must not silently overwrite processed orders. Pending order changes must block production scheduling, production completion, and delivery creation until manager/admin approval or rejection. Regenerate `CRR变更回归校验报告-v2.0.md` with `verify-change-regression.js --write` only when intentionally updating the CRR artifact.
 
 A2 is advisory in n8n workflow 1: severe issues become an `A2风险提示` node output and do not automatically call A1 rollback. Manual rollback remains available through the web UI or `/api/n8n/a2-rollback`.
 

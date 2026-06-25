@@ -119,6 +119,33 @@ node generated-code\printshop-v1\scripts\verify-design-drift.js --check
 
 检测覆盖架构职责、依赖拓扑、接口契约、需求与角色覆盖四种漂移，并生成 `RCR逆向校验报告-v1.0.md`、`模块设计质量校验-v1.0.md` 和 `ADR-002` 至 `ADR-004`。
 
+## v2 需求变更管理工程
+
+课程需求变更管理闭环产物位于：
+
+```text
+generated-code/printshop-v2/
+obsidian-vault/wiki/summaries/变更管理/
+obsidian-vault/wiki/baselines/BL-20260624-01/
+```
+
+v2 在 v1 准生产 Print MIS 基础上实现 `CR-001 订单变更冻结`：处理中订单修改产品类型、颜色工艺、页数、份数、交付方式或加急信息时，系统不直接覆盖订单，而是创建订单变更请求，冻结生产/SLA，等待店长审批。审批通过后更新订单并重新计价，驳回后保持原订单。
+
+启动与验证：
+
+```powershell
+cd generated-code\printshop-v2
+docker compose up -d mysql
+mvn spring-boot:run
+mvn test
+mvn package
+node scripts\verify-change-regression.js --write
+node scripts\verify-change-regression.js --check
+```
+
+新增契约为 `obsidian-vault/wiki/summaries/API契约/OpenAPI-接口契约-v2.1.yaml`，新增基线为 `BL-20260624-01`。
+v2 MySQL 默认使用独立容器 `printshop-v2-mysql`，端口 `13307`，数据库 `printshop_v2`；不要复用 v1 的 `printshop_v1`，否则 Flyway 会因历史校验和不同而拒绝启动。
+
 ## n8n 工作流
 
 本仓库提供可导入 n8n 的需求开发全流程工作流：

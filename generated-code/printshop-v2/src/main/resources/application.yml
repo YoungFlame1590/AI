@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: printshop-v2
+  datasource:
+    url: ${PRINTSHOP_DB_URL:jdbc:mysql://127.0.0.1:13307/printshop_v2?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${PRINTSHOP_DB_USER:printshop}
+    password: ${PRINTSHOP_DB_PASSWORD:printshop123}
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+server:
+  port: 8080
+printshop:
+  upload-dir: ${PRINTSHOP_UPLOAD_DIR:uploads-v2}
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
