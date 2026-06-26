@@ -1,4 +1,4 @@
-import { api, show, showError } from "./api.js";
+import { api, authHeader, show, showError } from "./api.js";
 import { modules } from "./config.js";
 import { defaultRecordForModule, updateOrderAmountPreview } from "./orders.js";
 import {
@@ -21,9 +21,29 @@ const handlers = {
   loadOrderFiles,
 };
 
+let registerMode = false;
+
 async function login(event) {
   event.preventDefault();
   try {
+    if (registerMode) {
+      const session = await api("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          username: el.username.value.trim(),
+          password: el.password.value,
+          displayName: el.displayName.value.trim() || el.username.value.trim(),
+        }),
+      });
+      state.token = session.token;
+      state.user = session.user;
+      localStorage.setItem("printshop-token", state.token);
+      localStorage.setItem("printshop-user", JSON.stringify(state.user));
+      toggleRegisterMode(false);
+      toggleAuth();
+      await loadModule("dashboard");
+      return;
+    }
     const session = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ username: el.username.value.trim(), password: el.password.value }),
@@ -37,6 +57,15 @@ async function login(event) {
   } catch (error) {
     showError(error);
   }
+}
+
+function toggleRegisterMode(force = null) {
+  registerMode = force === null ? !registerMode : force;
+  document.querySelectorAll(".register-only").forEach((node) => node.classList.toggle("hidden", !registerMode));
+  el.loginForm.querySelector("button[type='submit']").textContent = registerMode ? "注册并进入" : "登录系统";
+  el.registerModeBtn.textContent = registerMode ? "返回登录" : "注册客户账号";
+  el.username.autocomplete = registerMode ? "username" : "username";
+  el.password.autocomplete = registerMode ? "new-password" : "current-password";
 }
 
 function logout() {
@@ -241,7 +270,40 @@ async function loadOrderFiles() {
   }
 }
 
+async function openOrderFile(fileId, mode) {
+  const response = await fetch(`/api/order-files/${fileId}/${mode}`, {
+    headers: authHeader(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || `${response.status} ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  if (mode === "preview") {
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileNameFromDisposition(response.headers.get("Content-Disposition")) || `order-file-${fileId}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function fileNameFromDisposition(disposition) {
+  if (!disposition) return "";
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) return decodeURIComponent(utf8[1]);
+  const ascii = disposition.match(/filename="?([^";]+)"?/i);
+  return ascii ? ascii[1] : "";
+}
+
 el.loginForm.addEventListener("submit", login);
+el.registerModeBtn.addEventListener("click", () => toggleRegisterMode());
 el.logoutBtn.addEventListener("click", logout);
 el.clearDataBtn.addEventListener("click", () => clearBusinessData().catch(showError));
 el.refreshBtn.addEventListener("click", () => loadModule().catch(showError));
@@ -258,6 +320,16 @@ document.querySelectorAll(".nav button").forEach((button) => {
 });
 
 document.body.addEventListener("click", (event) => {
+  const preview = event.target.closest("[data-file-preview]");
+  if (preview) {
+    openOrderFile(preview.dataset.filePreview, "preview").catch(showError);
+    return;
+  }
+  const download = event.target.closest("[data-file-download]");
+  if (download) {
+    openOrderFile(download.dataset.fileDownload, "download").catch(showError);
+    return;
+  }
   const row = event.target.closest("tr[data-id]");
   if (!row) return;
   const rowId = row.dataset.id;

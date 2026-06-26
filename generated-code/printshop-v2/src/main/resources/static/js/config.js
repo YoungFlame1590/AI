@@ -216,6 +216,32 @@ export const modules = {
     columns: ["paymentNo", "orderId", "amount", "method", "status"],
     actions: [["退款", "POST", (id) => `/api/payments/${id}/refund`]],
   },
+  users: {
+    title: "用户",
+    endpoint: "/api/admin/users",
+    fields: [
+      ["username", "账号"],
+      ["password", "初始密码"],
+      ["role", "角色", "select", ["CUSTOMER", "CLERK", "MANAGER", "OPS", "FINANCE", "COURIER", "ADMIN"]],
+      ["displayName", "显示名称"],
+      ["storeId", "门店ID", "number"],
+      ["active", "启用", "select", ["true", "false"]],
+    ],
+    columns: ["username", "displayName", "role", "storeId", "active"],
+    actions: [["重置密码为 demo123", "POST", (id) => `/api/admin/users/${id}/reset-password`, { password: "demo123" }]],
+  },
+  stores: {
+    title: "门店",
+    endpoint: "/api/admin/stores",
+    fields: [
+      ["code", "门店编码"],
+      ["name", "门店名称"],
+      ["address", "地址"],
+      ["phone", "电话"],
+      ["active", "启用", "select", ["true", "false"]],
+    ],
+    columns: ["code", "name", "address", "phone", "active"],
+  },
   orderChangeRequests: {
     title: "订单变更",
     endpoint: "/api/order-change-requests",

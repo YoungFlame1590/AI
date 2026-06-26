@@ -101,17 +101,22 @@ public class FinanceService {
     }
 
     @Transactional(readOnly = true)
-    public List<InvoiceRecord> invoices() {
-        return invoices.findAll();
+    public List<InvoiceRecord> invoices(String username) {
+        Set<Long> visibleOrderIds = visibleOrderIds(username);
+        return invoices.findAll().stream()
+                .filter(invoice -> visibleOrderIds.contains(invoice.orderId))
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public InvoiceRecord getInvoice(Long id) {
-        return invoices.findById(id).orElseThrow(() -> notFound("发票", id));
+    public InvoiceRecord getInvoice(String username, Long id) {
+        InvoiceRecord invoice = invoices.findById(id).orElseThrow(() -> notFound("发票", id));
+        orderService.requireVisibleOrder(username, invoice.orderId);
+        return invoice;
     }
 
     public InvoiceRecord updateInvoice(String username, Long id, InvoiceRecord request) {
-        InvoiceRecord invoice = getInvoice(id);
+        InvoiceRecord invoice = getInvoice(username, id);
         invoice.title = text(request.title, invoice.title);
         invoice.taxNo = text(request.taxNo, invoice.taxNo);
         invoice.amount = request.amount == null ? invoice.amount : request.amount;
@@ -122,7 +127,7 @@ public class FinanceService {
 
     public InvoiceRecord issueInvoice(String username, Long id) {
         requireFinanceWriter(username, "开票");
-        InvoiceRecord invoice = getInvoice(id);
+        InvoiceRecord invoice = getInvoice(username, id);
         if (INVOICE_ISSUED.equals(invoice.status)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "该发票已开具，不能重复开票。");
         }
@@ -134,7 +139,7 @@ public class FinanceService {
     }
 
     public InvoiceRecord deleteInvoice(String username, Long id) {
-        InvoiceRecord invoice = getInvoice(id);
+        InvoiceRecord invoice = getInvoice(username, id);
         invoices.delete(invoice);
         audit.record(username, "FIN", "DELETE_INVOICE", "INVOICE", id, invoice.invoiceNo);
         return invoice;
@@ -224,18 +229,23 @@ public class FinanceService {
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentRecord> payments() {
-        return payments.findAll();
+    public List<PaymentRecord> payments(String username) {
+        Set<Long> visibleOrderIds = visibleOrderIds(username);
+        return payments.findAll().stream()
+                .filter(payment -> visibleOrderIds.contains(payment.orderId))
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public PaymentRecord getPayment(Long id) {
-        return payments.findById(id).orElseThrow(() -> notFound("付款记录", id));
+    public PaymentRecord getPayment(String username, Long id) {
+        PaymentRecord payment = payments.findById(id).orElseThrow(() -> notFound("付款记录", id));
+        orderService.requireVisibleOrder(username, payment.orderId);
+        return payment;
     }
 
     public PaymentRecord updatePayment(String username, Long id, PaymentRecord request) {
         requireFinanceWriter(username, "更新收款");
-        PaymentRecord payment = getPayment(id);
+        PaymentRecord payment = getPayment(username, id);
         payment.amount = request.amount == null ? payment.amount : request.amount;
         payment.method = text(request.method, payment.method);
         payment.status = text(request.status, payment.status);
@@ -245,7 +255,7 @@ public class FinanceService {
 
     public PaymentRecord refundPayment(String username, Long id) {
         requireFinanceWriter(username, "退款");
-        PaymentRecord payment = getPayment(id);
+        PaymentRecord payment = getPayment(username, id);
         if (REFUNDED.equals(payment.status)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "该退款已处理，不能重复退款。");
         }
@@ -268,7 +278,7 @@ public class FinanceService {
 
     public PaymentRecord deletePayment(String username, Long id) {
         requireFinanceWriter(username, "删除收款");
-        PaymentRecord payment = getPayment(id);
+        PaymentRecord payment = getPayment(username, id);
         payments.delete(payment);
         audit.record(username, "FIN", "DELETE_PAYMENT", "PAYMENT", id, payment.paymentNo);
         return payment;
@@ -325,6 +335,12 @@ public class FinanceService {
 
     private List<InvoiceRecord> activeInvoices(Long orderId) {
         return invoices.findByOrderIdAndStatusIn(orderId, Set.of(INVOICE_WAITING, INVOICE_ISSUED));
+    }
+
+    private Set<Long> visibleOrderIds(String username) {
+        return orderService.visibleOrders(identityService.requireUser(username)).stream()
+                .map(order -> order.id)
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     private void ensureRefundAllowed(PrintOrder order) {

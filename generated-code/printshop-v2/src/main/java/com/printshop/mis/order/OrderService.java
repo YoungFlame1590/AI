@@ -17,17 +17,22 @@ import com.printshop.mis.repository.OrderFileRepository;
 import com.printshop.mis.repository.PrintOrderRepository;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,6 +42,9 @@ import org.springframework.web.multipart.MultipartFile;
 public class OrderService {
 
     private static final DateTimeFormatter DISPLAY_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final long MAX_UPLOAD_BYTES = 50L * 1024L * 1024L;
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "jpg", "jpeg", "png", "doc", "docx", "psd", "ai");
+    private static final Set<String> PREVIEW_CONTENT_TYPES = Set.of("application/pdf", "image/jpeg", "image/png");
 
     private final IdentityService identityService;
     private final PrintOrderRepository orders;
@@ -156,18 +164,31 @@ public class OrderService {
     }
 
     public OrderFile uploadFile(String username, Long orderId, MultipartFile upload) {
-        PrintOrder order = access.requireVisibleOrder(identityService.requireUser(username), orderId);
+        UserAccount user = identityService.requireUser(username);
+        PrintOrder order = access.requireVisibleOrder(user, orderId);
+        validateUpload(upload);
         try {
             Files.createDirectories(uploadRoot);
-            String safeName = java.util.UUID.randomUUID() + "-" + upload.getOriginalFilename();
-            Path target = uploadRoot.resolve(safeName).normalize();
+            String originalName = safeOriginalName(upload.getOriginalFilename());
+            String extension = extensionOf(originalName);
+            String storageName = UUID.randomUUID() + "." + extension;
+            Path target = uploadRoot.resolve(storageName).normalize();
+            if (!target.startsWith(uploadRoot)) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "文件名不合法。");
+            }
             upload.transferTo(target);
             OrderFile file = new OrderFile();
             file.orderId = orderId;
-            file.fileName = upload.getOriginalFilename();
+            file.fileName = originalName;
             file.filePath = target.toString();
+            file.contentType = resolveContentType(upload, extension);
+            file.storageName = storageName;
             file.sizeBytes = upload.getSize();
             file.fileStatus = "UPLOADED";
+            file.versionNo = Math.toIntExact(files.countByOrderId(orderId) + 1);
+            file.uploadedBy = user.displayName;
+            file.uploadedRole = user.role;
+            file.reviewStatus = "PENDING";
             file.uploadedAt = now();
             order.currentStep = "文件已上传，等待文件检查";
             order.updatedAt = now();
@@ -183,6 +204,24 @@ public class OrderService {
     public List<OrderFile> orderFiles(String username, Long orderId) {
         access.requireVisibleOrder(identityService.requireUser(username), orderId);
         return files.findByOrderIdOrderByUploadedAtDesc(orderId);
+    }
+
+    public StoredFile downloadFile(String username, Long fileId) {
+        UserAccount user = identityService.requireUser(username);
+        OrderFile file = requireVisibleFile(user, fileId);
+        audit.record(username, "ORD", "DOWNLOAD_FILE", "ORDER_FILE", file.id, file.fileName);
+        return storedFile(file, false);
+    }
+
+    public StoredFile previewFile(String username, Long fileId) {
+        UserAccount user = identityService.requireUser(username);
+        OrderFile file = requireVisibleFile(user, fileId);
+        String contentType = text(file.contentType, "application/octet-stream").toLowerCase(Locale.ROOT);
+        if (!PREVIEW_CONTENT_TYPES.contains(contentType)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该文件类型暂不支持在线预览，请下载查看。");
+        }
+        audit.record(username, "ORD", "PREVIEW_FILE", "ORDER_FILE", file.id, file.fileName);
+        return storedFile(file, true);
     }
 
     public PrintOrder requireVisibleOrder(String username, Long id) {
@@ -285,5 +324,69 @@ public class OrderService {
             }
         }
         return false;
+    }
+
+    private OrderFile requireVisibleFile(UserAccount user, Long fileId) {
+        OrderFile file = files.findById(fileId).orElseThrow(() -> com.printshop.mis.shared.MisSupport.notFound("订单文件", fileId));
+        access.requireVisibleOrder(user, file.orderId);
+        return file;
+    }
+
+    private StoredFile storedFile(OrderFile file, boolean inline) {
+        Path path = Path.of(text(file.filePath, uploadRoot.resolve(text(file.storageName, "")).toString())).toAbsolutePath().normalize();
+        if (!path.startsWith(uploadRoot) || !Files.exists(path) || !Files.isRegularFile(path)) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "文件实体不存在或已被移除。");
+        }
+        try {
+            Resource resource = new UrlResource(path.toUri());
+            return new StoredFile(file, resource, text(file.contentType, "application/octet-stream"), inline);
+        } catch (MalformedURLException ex) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "文件地址无效：" + ex.getMessage());
+        }
+    }
+
+    private void validateUpload(MultipartFile upload) {
+        if (upload == null || upload.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "上传文件不能为空。");
+        }
+        if (upload.getSize() > MAX_UPLOAD_BYTES) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "文件不能超过 50MB。");
+        }
+        String extension = extensionOf(safeOriginalName(upload.getOriginalFilename()));
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "不支持的文件类型：" + extension);
+        }
+    }
+
+    private String safeOriginalName(String originalName) {
+        String name = originalName == null ? "upload.bin" : Path.of(originalName).getFileName().toString();
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        return name.isBlank() ? "upload.bin" : name;
+    }
+
+    private String extensionOf(String fileName) {
+        int index = fileName.lastIndexOf('.');
+        if (index < 0 || index == fileName.length() - 1) {
+            return "";
+        }
+        return fileName.substring(index + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private String resolveContentType(MultipartFile upload, String extension) {
+        String contentType = upload.getContentType();
+        if (contentType != null && !contentType.isBlank()) {
+            return contentType;
+        }
+        return switch (extension) {
+            case "pdf" -> "application/pdf";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "doc" -> "application/msword";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            default -> "application/octet-stream";
+        };
+    }
+
+    public record StoredFile(OrderFile file, Resource resource, String contentType, boolean inline) {
     }
 }

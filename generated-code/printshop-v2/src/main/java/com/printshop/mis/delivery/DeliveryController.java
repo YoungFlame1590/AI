@@ -35,8 +35,8 @@ public class DeliveryController {
     }
 
     @GetMapping("/api/delivery-tasks/{id}")
-    public ApiResponse<?> getDeliveryTask(@PathVariable Long id) {
-        return api.ok(deliveryService.getDeliveryTask(id));
+    public ApiResponse<?> getDeliveryTask(Principal principal, @PathVariable Long id) {
+        return api.ok(deliveryService.getDeliveryTask(principal.getName(), id));
     }
 
     @PutMapping("/api/delivery-tasks/{id}")

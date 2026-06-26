@@ -24,8 +24,8 @@ public class JobTicketController {
     }
 
     @GetMapping("/api/job-tickets")
-    public ApiResponse<?> jobTickets() {
-        return api.ok(jobTicketService.jobTickets());
+    public ApiResponse<?> jobTickets(Principal principal) {
+        return api.ok(jobTicketService.jobTickets(principal.getName()));
     }
 
     @PostMapping("/api/job-tickets")
@@ -34,8 +34,8 @@ public class JobTicketController {
     }
 
     @GetMapping("/api/job-tickets/{id}")
-    public ApiResponse<?> getJobTicket(@PathVariable Long id) {
-        return api.ok(jobTicketService.getJobTicket(id));
+    public ApiResponse<?> getJobTicket(Principal principal, @PathVariable Long id) {
+        return api.ok(jobTicketService.getJobTicket(principal.getName(), id));
     }
 
     @PutMapping("/api/job-tickets/{id}")

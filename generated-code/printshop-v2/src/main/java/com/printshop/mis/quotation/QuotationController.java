@@ -24,8 +24,8 @@ public class QuotationController {
     }
 
     @GetMapping("/api/quotations")
-    public ApiResponse<?> quotations() {
-        return api.ok(quotationService.quotations());
+    public ApiResponse<?> quotations(Principal principal) {
+        return api.ok(quotationService.quotations(principal.getName()));
     }
 
     @PostMapping("/api/quotations")
@@ -34,8 +34,8 @@ public class QuotationController {
     }
 
     @GetMapping("/api/quotations/{id}")
-    public ApiResponse<?> getQuotation(@PathVariable Long id) {
-        return api.ok(quotationService.getQuotation(id));
+    public ApiResponse<?> getQuotation(Principal principal, @PathVariable Long id) {
+        return api.ok(quotationService.getQuotation(principal.getName(), id));
     }
 
     @PutMapping("/api/quotations/{id}")

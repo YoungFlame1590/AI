@@ -16,7 +16,14 @@ public class OrderFile {
     public Long orderId;
     public String fileName;
     public String filePath;
+    public String contentType;
+    public String storageName;
     public Long sizeBytes;
     public String fileStatus;
+    public Integer versionNo;
+    public String uploadedBy;
+    public String uploadedRole;
+    public String remark;
+    public String reviewStatus;
     public LocalDateTime uploadedAt;
 }

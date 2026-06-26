@@ -2,6 +2,25 @@ import { optionAliases, orderEditableFields, orderOptions, priceConfig } from ".
 import { el, state } from "./state.js";
 
 export function defaultRecordForModule(moduleName) {
+  if (moduleName === "users") {
+    return {
+      username: "",
+      password: "demo123",
+      role: "CUSTOMER",
+      displayName: "",
+      storeId: state.user?.storeId || 1,
+      active: "true",
+    };
+  }
+  if (moduleName === "stores") {
+    return {
+      code: "",
+      name: "",
+      address: "",
+      phone: "",
+      active: "true",
+    };
+  }
   if (moduleName !== "orders") return {};
   const defaults = {
     customerName: state.user?.displayName || "",
@@ -62,6 +81,7 @@ export function updateOrderAmountPreview() {
 
 export function isFieldDisabled(config, record, field) {
   if (config.readonly || !state.editing) return true;
+  if (state.module === "users" && state.selected?.id && ["username", "password"].includes(field)) return true;
   if (state.module !== "orders") return false;
   if (["orderNo", "customerName", "storeId", "totalAmount", "paidAmount"].includes(field)) return true;
   if (!state.selected?.id && ["dueAt", "status", "paymentStatus", "currentStep"].includes(field)) return true;

@@ -3,8 +3,11 @@ package com.printshop.mis.reporting;
 import com.printshop.mis.domain.InventoryItem;
 import com.printshop.mis.domain.PaymentRecord;
 import com.printshop.mis.domain.PrintOrder;
+import com.printshop.mis.identity.IdentityService;
+import com.printshop.mis.order.OrderService;
 import com.printshop.mis.repository.InventoryItemRepository;
 import com.printshop.mis.repository.InvoiceRecordRepository;
+import com.printshop.mis.repository.JobTicketRepository;
 import com.printshop.mis.repository.PaymentRecordRepository;
 import com.printshop.mis.repository.PrintOrderRepository;
 import com.printshop.mis.repository.ProductionTaskRepository;
@@ -20,33 +23,48 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportingService {
 
     private final PrintOrderRepository orders;
+    private final IdentityService identityService;
+    private final OrderService orderService;
     private final InvoiceRecordRepository invoices;
     private final PaymentRecordRepository payments;
     private final ProductionTaskRepository productionTasks;
+    private final JobTicketRepository jobTickets;
     private final InventoryItemRepository inventoryItems;
 
     public ReportingService(
             PrintOrderRepository orders,
+            IdentityService identityService,
+            OrderService orderService,
             InvoiceRecordRepository invoices,
             PaymentRecordRepository payments,
             ProductionTaskRepository productionTasks,
+            JobTicketRepository jobTickets,
             InventoryItemRepository inventoryItems
     ) {
         this.orders = orders;
+        this.identityService = identityService;
+        this.orderService = orderService;
         this.invoices = invoices;
         this.payments = payments;
         this.productionTasks = productionTasks;
+        this.jobTickets = jobTickets;
         this.inventoryItems = inventoryItems;
     }
 
-    public Map<String, Object> reports() {
-        var allOrders = orders.findAll();
-        var allPayments = payments.findAll();
+    public Map<String, Object> reports(String username) {
+        var allOrders = orderService.visibleOrders(identityService.requireUser(username));
+        var visibleOrderIds = allOrders.stream().map(order -> order.id).collect(java.util.stream.Collectors.toSet());
+        var allPayments = payments.findAll().stream()
+                .filter(payment -> visibleOrderIds.contains(payment.orderId))
+                .toList();
+        var allInvoices = invoices.findAll().stream()
+                .filter(invoice -> visibleOrderIds.contains(invoice.orderId))
+                .toList();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("orderFunnel", orderFunnel(allOrders));
         result.put("finance", Map.of(
-                "invoiceCount", invoices.count(),
-                "issuedInvoiceCount", invoices.findAll().stream().filter(invoice -> "ISSUED".equals(invoice.status)).count(),
+                "invoiceCount", allInvoices.size(),
+                "issuedInvoiceCount", allInvoices.stream().filter(invoice -> "ISSUED".equals(invoice.status)).count(),
                 "paymentCount", allPayments.size(),
                 "paidAmount", sumPayments(allPayments, "SUCCESS"),
                 "refundAmount", sumPayments(allPayments, "REFUNDED")
@@ -61,7 +79,11 @@ public class ReportingService {
                 .collect(Collectors.groupingBy(order -> order.storeName == null ? "未分配门店" : order.storeName,
                         LinkedHashMap::new,
                         Collectors.collectingAndThen(Collectors.toList(), this::storeStats))));
-        result.put("productionLoad", productionTasks.findAll());
+        result.put("productionLoad", productionTasks.findAll().stream()
+                .filter(task -> jobTickets.findById(task.jobTicketId)
+                        .map(ticket -> visibleOrderIds.contains(ticket.orderId))
+                        .orElse(false))
+                .toList());
         result.put("lowStock", inventoryItems.findAll().stream()
                 .filter(this::isLowStock)
                 .toList());

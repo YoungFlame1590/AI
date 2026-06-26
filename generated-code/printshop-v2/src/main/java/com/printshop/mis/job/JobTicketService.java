@@ -8,10 +8,12 @@ import static com.printshop.mis.shared.MisSupport.text;
 import com.printshop.mis.audit.AuditTrailService;
 import com.printshop.mis.domain.JobTicket;
 import com.printshop.mis.domain.PrintOrder;
+import com.printshop.mis.identity.IdentityService;
 import com.printshop.mis.order.OrderService;
 import com.printshop.mis.order.OrderStatusPolicy;
 import com.printshop.mis.repository.JobTicketRepository;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,12 +22,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class JobTicketService {
 
     private final OrderService orderService;
+    private final IdentityService identityService;
     private final OrderStatusPolicy statusPolicy;
     private final JobTicketRepository jobTickets;
     private final AuditTrailService audit;
 
-    public JobTicketService(OrderService orderService, OrderStatusPolicy statusPolicy, JobTicketRepository jobTickets, AuditTrailService audit) {
+    public JobTicketService(OrderService orderService, IdentityService identityService, OrderStatusPolicy statusPolicy, JobTicketRepository jobTickets, AuditTrailService audit) {
         this.orderService = orderService;
+        this.identityService = identityService;
         this.statusPolicy = statusPolicy;
         this.jobTickets = jobTickets;
         this.audit = audit;
@@ -52,17 +56,22 @@ public class JobTicketService {
     }
 
     @Transactional(readOnly = true)
-    public List<JobTicket> jobTickets() {
-        return jobTickets.findAll();
+    public List<JobTicket> jobTickets(String username) {
+        Set<Long> visibleOrderIds = visibleOrderIds(username);
+        return jobTickets.findAll().stream()
+                .filter(ticket -> visibleOrderIds.contains(ticket.orderId))
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public JobTicket getJobTicket(Long id) {
-        return jobTickets.findById(id).orElseThrow(() -> notFound("作业单", id));
+    public JobTicket getJobTicket(String username, Long id) {
+        JobTicket ticket = jobTickets.findById(id).orElseThrow(() -> notFound("作业单", id));
+        orderService.requireVisibleOrder(username, ticket.orderId);
+        return ticket;
     }
 
     public JobTicket updateJobTicket(String username, Long id, JobTicket request) {
-        JobTicket ticket = getJobTicket(id);
+        JobTicket ticket = getJobTicket(username, id);
         ticket.specs = text(request.specs, ticket.specs);
         ticket.paperType = text(request.paperType, ticket.paperType);
         ticket.binding = text(request.binding, ticket.binding);
@@ -72,9 +81,15 @@ public class JobTicketService {
     }
 
     public JobTicket deleteJobTicket(String username, Long id) {
-        JobTicket ticket = getJobTicket(id);
+        JobTicket ticket = getJobTicket(username, id);
         jobTickets.delete(ticket);
         audit.record(username, "PRO", "DELETE_JOB_TICKET", "JOB_TICKET", id, ticket.ticketNo);
         return ticket;
+    }
+
+    private Set<Long> visibleOrderIds(String username) {
+        return orderService.visibleOrders(identityService.requireUser(username)).stream()
+                .map(order -> order.id)
+                .collect(java.util.stream.Collectors.toSet());
     }
 }

@@ -68,17 +68,22 @@ public class QuotationService {
     }
 
     @Transactional(readOnly = true)
-    public List<Quotation> quotations() {
-        return quotations.findAll();
+    public List<Quotation> quotations(String username) {
+        Set<Long> visibleOrderIds = visibleOrderIds(username);
+        return quotations.findAll().stream()
+                .filter(quotation -> visibleOrderIds.contains(quotation.orderId))
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public Quotation getQuotation(Long id) {
-        return quotations.findById(id).orElseThrow(() -> notFound("报价", id));
+    public Quotation getQuotation(String username, Long id) {
+        Quotation quotation = quotations.findById(id).orElseThrow(() -> notFound("报价", id));
+        orderService.requireVisibleOrder(username, quotation.orderId);
+        return quotation;
     }
 
     public Quotation updateQuotation(String username, Long id, Quotation request) {
-        Quotation quotation = getQuotation(id);
+        Quotation quotation = getQuotation(username, id);
         quotation.subtotal = request.subtotal == null ? quotation.subtotal : request.subtotal;
         quotation.discountRate = request.discountRate == null ? quotation.discountRate : request.discountRate;
         quotation.finalAmount = request.finalAmount == null ? quotation.finalAmount : request.finalAmount;
@@ -89,7 +94,7 @@ public class QuotationService {
     }
 
     public Quotation approveQuotation(String username, Long id) {
-        Quotation quotation = getQuotation(id);
+        Quotation quotation = getQuotation(username, id);
         quotation.status = APPROVED;
         quotation.approvedBy = identityService.requireUser(username).displayName;
         audit.record(username, "QUO", "APPROVE_QUOTATION", "QUOTATION", id, quotation.quoteNo);
@@ -97,7 +102,7 @@ public class QuotationService {
     }
 
     public Quotation confirmQuotation(String username, Long id) {
-        Quotation quotation = getQuotation(id);
+        Quotation quotation = getQuotation(username, id);
         PrintOrder order = orderService.requireVisibleOrder(username, quotation.orderId);
         String role = identityService.requireUser(username).role;
         if (!Set.of("CUSTOMER", "ADMIN").contains(role)) {
@@ -124,9 +129,15 @@ public class QuotationService {
     }
 
     public Quotation deleteQuotation(String username, Long id) {
-        Quotation quotation = getQuotation(id);
+        Quotation quotation = getQuotation(username, id);
         quotations.delete(quotation);
         audit.record(username, "QUO", "DELETE_QUOTATION", "QUOTATION", id, quotation.quoteNo);
         return quotation;
+    }
+
+    private Set<Long> visibleOrderIds(String username) {
+        return orderService.visibleOrders(identityService.requireUser(username)).stream()
+                .map(order -> order.id)
+                .collect(java.util.stream.Collectors.toSet());
     }
 }

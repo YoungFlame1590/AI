@@ -2,6 +2,7 @@ package com.printshop.mis.reporting;
 
 import com.printshop.common.api.ApiResponse;
 import com.printshop.mis.shared.ApiSupport;
+import java.security.Principal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,7 +18,7 @@ public class ReportController {
     }
 
     @GetMapping("/api/reports")
-    public ApiResponse<?> reports() {
-        return api.ok(reportingService.reports());
+    public ApiResponse<?> reports(Principal principal) {
+        return api.ok(reportingService.reports(principal.getName()));
     }
 }

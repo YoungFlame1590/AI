@@ -67,7 +67,9 @@ public class DeliveryService {
     public List<DeliveryTask> deliveryTasks(String username) {
         UserAccount user = identityService.requireUser(username);
         if (!"COURIER".equals(user.role)) {
-            return deliveryTasks.findAll();
+            return deliveryTasks.findAll().stream()
+                    .filter(task -> canViewTask(user, task))
+                    .toList();
         }
         return deliveryTasks.findAll().stream()
                 .filter(task -> carrierMatches(user, task))
@@ -75,12 +77,14 @@ public class DeliveryService {
     }
 
     @Transactional(readOnly = true)
-    public DeliveryTask getDeliveryTask(Long id) {
-        return deliveryTasks.findById(id).orElseThrow(() -> notFound("配送任务", id));
+    public DeliveryTask getDeliveryTask(String username, Long id) {
+        DeliveryTask task = deliveryTasks.findById(id).orElseThrow(() -> notFound("配送任务", id));
+        orderService.requireVisibleOrder(username, task.orderId);
+        return task;
     }
 
     public DeliveryTask updateDeliveryTask(String username, Long id, DeliveryTask request) {
-        DeliveryTask task = getDeliveryTask(id);
+        DeliveryTask task = getDeliveryTask(username, id);
         task.mode = text(request.mode, task.mode);
         task.carrierName = text(request.carrierName, task.carrierName);
         task.targetStore = text(request.targetStore, task.targetStore);
@@ -92,7 +96,7 @@ public class DeliveryService {
     }
 
     public DeliveryTask signDelivery(String username, Long id, Map<String, Object> payload) {
-        DeliveryTask task = getDeliveryTask(id);
+        DeliveryTask task = getDeliveryTask(username, id);
         PrintOrder order = orderService.requireVisibleOrder(username, task.orderId);
         statusPolicy.requireStatus(order, java.util.Set.of(OrderStatusPolicy.DELIVERING), "签收", "生成配送并由配送员接单");
         task.status = "SIGNED";
@@ -129,7 +133,7 @@ public class DeliveryService {
     }
 
     public DeliveryTask deleteDeliveryTask(String username, Long id) {
-        DeliveryTask task = getDeliveryTask(id);
+        DeliveryTask task = getDeliveryTask(username, id);
         deliveryTasks.delete(task);
         audit.record(username, "DLV", "DELETE_DELIVERY_TASK", "DELIVERY_TASK", id, task.taskNo);
         return task;
@@ -147,5 +151,14 @@ public class DeliveryService {
                 || carrier.isBlank()
                 || "待分配".equals(carrier)
                 || "PENDING".equals(task.status);
+    }
+
+    private boolean canViewTask(UserAccount user, DeliveryTask task) {
+        try {
+            orderService.requireVisibleOrder(user.username, task.orderId);
+            return true;
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 }

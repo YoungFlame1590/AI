@@ -2,10 +2,14 @@ package com.printshop.mis.order;
 
 import com.printshop.common.api.ApiResponse;
 import com.printshop.mis.domain.PrintOrder;
+import com.printshop.mis.order.OrderService.StoredFile;
 import com.printshop.mis.shared.ApiSupport;
 import java.security.Principal;
 import java.util.Map;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -72,5 +76,25 @@ public class OrderController {
     @GetMapping("/api/orders/{id}/files")
     public ApiResponse<?> orderFiles(Principal principal, @PathVariable Long id) {
         return api.ok(orderService.orderFiles(principal.getName(), id));
+    }
+
+    @GetMapping("/api/order-files/{fileId}/download")
+    public ResponseEntity<?> downloadOrderFile(Principal principal, @PathVariable Long fileId) {
+        return fileResponse(orderService.downloadFile(principal.getName(), fileId));
+    }
+
+    @GetMapping("/api/order-files/{fileId}/preview")
+    public ResponseEntity<?> previewOrderFile(Principal principal, @PathVariable Long fileId) {
+        return fileResponse(orderService.previewFile(principal.getName(), fileId));
+    }
+
+    private ResponseEntity<?> fileResponse(StoredFile stored) {
+        ContentDisposition disposition = (stored.inline() ? ContentDisposition.inline() : ContentDisposition.attachment())
+                .filename(stored.file().fileName, java.nio.charset.StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentType(MediaType.parseMediaType(stored.contentType()))
+                .body(stored.resource());
     }
 }

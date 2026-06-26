@@ -24,8 +24,8 @@ public class ProductionTaskController {
     }
 
     @GetMapping("/api/production-tasks")
-    public ApiResponse<?> productionTasks() {
-        return api.ok(productionTaskService.productionTasks());
+    public ApiResponse<?> productionTasks(Principal principal) {
+        return api.ok(productionTaskService.productionTasks(principal.getName()));
     }
 
     @PostMapping("/api/production-tasks")
@@ -34,8 +34,8 @@ public class ProductionTaskController {
     }
 
     @GetMapping("/api/production-tasks/{id}")
-    public ApiResponse<?> getProductionTask(@PathVariable Long id) {
-        return api.ok(productionTaskService.getProductionTask(id));
+    public ApiResponse<?> getProductionTask(Principal principal, @PathVariable Long id) {
+        return api.ok(productionTaskService.getProductionTask(principal.getName(), id));
     }
 
     @PutMapping("/api/production-tasks/{id}")

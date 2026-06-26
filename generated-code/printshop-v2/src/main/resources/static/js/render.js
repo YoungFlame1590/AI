@@ -364,7 +364,7 @@ function aggregateSectionsForRole(aggregate) {
     deliveryTasks: aggregateSection("配送", aggregate.deliveryTasks, ["taskNo", "mode", "carrierName", "status"]),
     finance: aggregateSection("财务", financeItems, ["paymentNo", "invoiceNo", "amount", "status"]),
     changeRequests: aggregateSection("变更", aggregate.changeRequests, ["requestNo", "requestedBy", "status", "amountDelta"]),
-    files: aggregateSection("文件", aggregate.files, ["fileName", "fileStatus", "uploadedAt"]),
+    files: fileListSection(aggregate.files),
   };
   const visible = {
     CUSTOMER: ["progress", "files", "changeRequests", "finance"],
@@ -376,6 +376,50 @@ function aggregateSectionsForRole(aggregate) {
     ADMIN: Object.keys(allSections),
   }[role] || ["progress"];
   return visible.map((key) => allSections[key]).join("");
+}
+
+function fileListSection(files = []) {
+  if (!files.length) {
+    return `<section class="aggregate-section wide"><h3>文件</h3><p class="empty">暂无文件记录</p></section>`;
+  }
+  const columns = ["versionNo", "fileName", "contentType", "sizeBytes", "uploadedBy", "reviewStatus", "uploadedAt", "fileActions"];
+  return `
+    <section class="aggregate-section wide">
+      <h3>文件</h3>
+      <table>
+        <thead><tr>${columns.map((column) => `<th>${escapeHtml(labelForColumn(column))}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${files.slice(0, 8).map((file) => `
+            <tr>
+              ${columns.map((column) => `<td>${fileCell(file, column)}</td>`).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </section>
+  `;
+}
+
+function fileCell(file, column) {
+  if (column === "fileActions") {
+    return `
+      <span class="file-actions">
+        <button type="button" data-file-preview="${escapeAttribute(file.id)}">预览</button>
+        <button type="button" data-file-download="${escapeAttribute(file.id)}">下载</button>
+      </span>
+    `;
+  }
+  if (column === "sizeBytes") {
+    return formatBytes(file.sizeBytes);
+  }
+  return formatCell(file[column], column);
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
 }
 
 function progressSection(aggregate) {
@@ -470,7 +514,7 @@ function createFieldNode(field, type, options = [], value = "") {
   }
   if (type === "select") {
     const node = document.createElement("select");
-    const normalizedValue = normalizeOptionValue(value);
+    const normalizedValue = String(normalizeOptionValue(value));
     for (const option of options) {
       const optionNode = document.createElement("option");
       optionNode.value = option;
@@ -524,7 +568,9 @@ function labelForColumn(column, config = null) {
     carrierName: "承运人",
     currentStep: "当前步骤",
     customerName: "客户",
+    contentType: "文件类型",
     fileName: "文件名",
+    fileActions: "文件操作",
     fileStatus: "文件状态",
     finalAmount: "最终金额",
     invoiceNo: "发票号",
@@ -541,12 +587,17 @@ function labelForColumn(column, config = null) {
     requestNo: "变更编号",
     requestedBy: "发起人",
     requesterRole: "发起角色",
+    sizeBytes: "大小",
     station: "工位/设备",
     status: "状态",
     taskNo: "任务号",
     ticketNo: "作业单号",
     title: "任务",
     uploadedAt: "上传时间",
+    uploadedBy: "上传人",
+    uploadedRole: "上传角色",
+    versionNo: "版本",
+    reviewStatus: "审核状态",
   };
   return labels[column] || column;
 }

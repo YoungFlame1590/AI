@@ -61,7 +61,11 @@ public class OrderChangeRequestService {
     public List<OrderChangeRequest> listChangeRequests(String username) {
         UserAccount user = identityService.requireUser(username);
         if (Set.of("MANAGER", "OPS", "FINANCE", "ADMIN").contains(user.role)) {
+            Set<Long> visibleOrderIds = orderService.visibleOrders(user).stream()
+                    .map(order -> order.id)
+                    .collect(java.util.stream.Collectors.toSet());
             return changeRequests.findAll().stream()
+                    .filter(change -> visibleOrderIds.contains(change.orderId))
                     .sorted(Comparator.comparing((OrderChangeRequest item) -> item.createdAt).reversed())
                     .toList();
         }

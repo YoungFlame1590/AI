@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface OrderFileRepository extends JpaRepository<OrderFile, Long> {
     List<OrderFile> findByOrderIdOrderByUploadedAtDesc(Long orderId);
+    long countByOrderId(Long orderId);
 }

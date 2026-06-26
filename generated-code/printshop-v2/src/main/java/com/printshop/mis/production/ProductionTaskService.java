@@ -9,7 +9,9 @@ import com.printshop.mis.audit.AuditTrailService;
 import com.printshop.mis.domain.JobTicket;
 import com.printshop.mis.domain.PrintOrder;
 import com.printshop.mis.domain.ProductionTask;
+import com.printshop.mis.identity.IdentityService;
 import com.printshop.mis.inventory.InventoryService;
+import com.printshop.mis.order.OrderAccessPolicy;
 import com.printshop.mis.order.OrderChangeGuard;
 import com.printshop.mis.order.OrderStatusPolicy;
 import com.printshop.mis.repository.JobTicketRepository;
@@ -24,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductionTaskService {
 
     private final ProductionTaskRepository productionTasks;
+    private final IdentityService identityService;
+    private final OrderAccessPolicy access;
     private final JobTicketRepository jobTickets;
     private final PrintOrderRepository orders;
     private final InventoryService inventoryService;
@@ -33,6 +37,8 @@ public class ProductionTaskService {
 
     public ProductionTaskService(
             ProductionTaskRepository productionTasks,
+            IdentityService identityService,
+            OrderAccessPolicy access,
             JobTicketRepository jobTickets,
             PrintOrderRepository orders,
             InventoryService inventoryService,
@@ -41,6 +47,8 @@ public class ProductionTaskService {
             AuditTrailService audit
     ) {
         this.productionTasks = productionTasks;
+        this.identityService = identityService;
+        this.access = access;
         this.jobTickets = jobTickets;
         this.orders = orders;
         this.inventoryService = inventoryService;
@@ -52,6 +60,7 @@ public class ProductionTaskService {
     public ProductionTask createProductionTask(String username, ProductionTask request) {
         JobTicket ticket = jobTickets.findById(request.jobTicketId).orElseThrow(() -> notFound("作业单", request.jobTicketId));
         PrintOrder order = orders.findById(ticket.orderId).orElseThrow(() -> notFound("订单", ticket.orderId));
+        access.requireVisibleOrder(identityService.requireUser(username), order.id);
         statusPolicy.requireStatus(order, java.util.Set.of(OrderStatusPolicy.JOB_READY), "排产任务", "生成作业单");
         changeGuard.requireNoPendingChange(order, "排产任务");
         inventoryService.assertAvailableForProduction(order.productType, order.colorMode, order.pageCount, order.copies);
@@ -74,17 +83,22 @@ public class ProductionTaskService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductionTask> productionTasks() {
-        return productionTasks.findAll();
+    public List<ProductionTask> productionTasks(String username) {
+        var user = identityService.requireUser(username);
+        return productionTasks.findAll().stream()
+                .filter(task -> access.canViewOrder(user, orderForTask(task)))
+                .toList();
     }
 
     @Transactional(readOnly = true)
-    public ProductionTask getProductionTask(Long id) {
-        return productionTasks.findById(id).orElseThrow(() -> notFound("生产任务", id));
+    public ProductionTask getProductionTask(String username, Long id) {
+        ProductionTask task = productionTasks.findById(id).orElseThrow(() -> notFound("生产任务", id));
+        access.requireVisibleOrder(identityService.requireUser(username), orderForTask(task).id);
+        return task;
     }
 
     public ProductionTask updateProductionTask(String username, Long id, ProductionTask request) {
-        ProductionTask task = getProductionTask(id);
+        ProductionTask task = getProductionTask(username, id);
         task.station = text(request.station, task.station);
         task.operatorName = text(request.operatorName, task.operatorName);
         task.plannedStart = text(request.plannedStart, task.plannedStart);
@@ -97,7 +111,7 @@ public class ProductionTaskService {
     }
 
     public ProductionTask completeProductionTask(String username, Long id) {
-        ProductionTask task = getProductionTask(id);
+        ProductionTask task = getProductionTask(username, id);
         JobTicket ticket = jobTickets.findById(task.jobTicketId).orElseThrow(() -> notFound("作业单", task.jobTicketId));
         PrintOrder order = orders.findById(ticket.orderId).orElseThrow(() -> notFound("订单", ticket.orderId));
         statusPolicy.requireStatus(order, java.util.Set.of(OrderStatusPolicy.IN_PRODUCTION), "完工质检通过", "完成排产并进入生产");
@@ -115,9 +129,14 @@ public class ProductionTaskService {
     }
 
     public ProductionTask deleteProductionTask(String username, Long id) {
-        ProductionTask task = getProductionTask(id);
+        ProductionTask task = getProductionTask(username, id);
         productionTasks.delete(task);
         audit.record(username, "PRO", "DELETE_PRODUCTION_TASK", "PRODUCTION_TASK", id, task.taskNo);
         return task;
+    }
+
+    private PrintOrder orderForTask(ProductionTask task) {
+        JobTicket ticket = jobTickets.findById(task.jobTicketId).orElseThrow(() -> notFound("作业单", task.jobTicketId));
+        return orders.findById(ticket.orderId).orElseThrow(() -> notFound("订单", ticket.orderId));
     }
 }

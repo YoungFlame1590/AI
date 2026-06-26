@@ -61,6 +61,13 @@ button.primary,
   color: #fff;
 }
 
+button.secondary,
+.login-card button.secondary {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--brand-dark);
+}
+
 button.danger {
   border-color: #d8b1b1;
   color: var(--bad);
@@ -309,6 +316,17 @@ textarea {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.file-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.file-actions button {
+  min-height: 28px;
+  padding: 0 9px;
 }
 
 .table-wrap {

@@ -25,8 +25,8 @@ public class FinanceController {
     }
 
     @GetMapping("/api/invoices")
-    public ApiResponse<?> invoices() {
-        return api.ok(financeService.invoices());
+    public ApiResponse<?> invoices(Principal principal) {
+        return api.ok(financeService.invoices(principal.getName()));
     }
 
     @PostMapping("/api/invoices")
@@ -35,8 +35,8 @@ public class FinanceController {
     }
 
     @GetMapping("/api/invoices/{id}")
-    public ApiResponse<?> getInvoice(@PathVariable Long id) {
-        return api.ok(financeService.getInvoice(id));
+    public ApiResponse<?> getInvoice(Principal principal, @PathVariable Long id) {
+        return api.ok(financeService.getInvoice(principal.getName(), id));
     }
 
     @PutMapping("/api/invoices/{id}")
@@ -55,8 +55,8 @@ public class FinanceController {
     }
 
     @GetMapping("/api/payments")
-    public ApiResponse<?> payments() {
-        return api.ok(financeService.payments());
+    public ApiResponse<?> payments(Principal principal) {
+        return api.ok(financeService.payments(principal.getName()));
     }
 
     @PostMapping("/api/payments")
@@ -65,8 +65,8 @@ public class FinanceController {
     }
 
     @GetMapping("/api/payments/{id}")
-    public ApiResponse<?> getPayment(@PathVariable Long id) {
-        return api.ok(financeService.getPayment(id));
+    public ApiResponse<?> getPayment(Principal principal, @PathVariable Long id) {
+        return api.ok(financeService.getPayment(principal.getName(), id));
     }
 
     @PutMapping("/api/payments/{id}")
