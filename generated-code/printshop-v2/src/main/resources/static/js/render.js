@@ -73,6 +73,7 @@ export function renderTable(customColumns, customTitle) {
 }
 
 export function renderForm(handlers) {
+  document.querySelector(".workspace")?.classList.toggle("reports-workspace", state.module === "reports");
   if (state.module === "dashboard" && state.aggregate) {
     renderAggregateDetail(handlers);
     return;
@@ -223,23 +224,60 @@ function renderReportDetail(report = {}) {
   const finance = report.finance || {};
   const lowStock = Array.isArray(report.lowStock) ? report.lowStock : [];
   const productionLoad = Array.isArray(report.productionLoad) ? report.productionLoad : [];
+  const financeSummary = [
+    ["收款金额", finance.paidAmount ?? 0, "paidAmount"],
+    ["退款金额", finance.refundAmount ?? 0, "refundAmount"],
+    ["收款笔数", finance.paymentCount ?? 0, "paymentCount"],
+    ["发票数量", finance.invoiceCount ?? 0, "invoiceCount"],
+    ["已开票数", finance.issuedInvoiceCount ?? 0, "issuedInvoiceCount"],
+  ];
+  const operationsSummary = [
+    ["订单总数", operations.totalOrders ?? 0, "totalOrders"],
+    ["已完成订单", operations.completedOrders ?? 0, "completedOrders"],
+    ["活跃订单", operations.activeOrders ?? 0, "activeOrders"],
+  ];
   el.recordForm.innerHTML = `
-    <section class="aggregate-summary wide">
-      <div><span>订单总数</span><strong>${formatCell(operations.totalOrders ?? 0)}</strong></div>
-      <div><span>已完成</span><strong>${formatCell(operations.completedOrders ?? 0)}</strong></div>
-      <div><span>活跃订单</span><strong>${formatCell(operations.activeOrders ?? 0)}</strong></div>
-      <div><span>收款金额</span><strong class="amount-cell">${formatCell(finance.paidAmount ?? 0, "paidAmount")}</strong></div>
-      <div><span>退款金额</span><strong class="amount-cell">${formatCell(finance.refundAmount ?? 0, "refundAmount")}</strong></div>
-      <div><span>已开票</span><strong>${formatCell(finance.issuedInvoiceCount ?? 0)}</strong></div>
+    <section class="report-dashboard wide">
+      <div class="aggregate-summary report-summary">
+        <div><span>订单总数</span><strong>${formatCell(operations.totalOrders ?? 0)}</strong></div>
+        <div><span>已完成</span><strong>${formatCell(operations.completedOrders ?? 0)}</strong></div>
+        <div><span>活跃订单</span><strong>${formatCell(operations.activeOrders ?? 0)}</strong></div>
+        <div><span>收款金额</span><strong class="amount-cell">${formatCell(finance.paidAmount ?? 0, "paidAmount")}</strong></div>
+        <div><span>退款金额</span><strong class="amount-cell">${formatCell(finance.refundAmount ?? 0, "refundAmount")}</strong></div>
+        <div><span>已开票</span><strong>${formatCell(finance.issuedInvoiceCount ?? 0)}</strong></div>
+      </div>
+      <div class="report-section-grid">
+        ${reportObjectTable("订单漏斗", report.orderFunnel, ["状态", "数量"])}
+        ${reportMetricList("财务摘要", financeSummary)}
+        ${reportMetricList("运营摘要", operationsSummary)}
+      </div>
+      <div class="report-section-grid report-section-grid-wide">
+        ${storeSummaryTable(report.storeSummary)}
+        ${reportArrayTable("生产负载", productionLoad, ["taskNo", "station", "operatorName", "status", "progressPercent"])}
+        ${reportArrayTable("低库存预警", lowStock, ["sku", "itemName", "category", "quantity", "safetyStock"])}
+      </div>
     </section>
-    ${reportObjectTable("订单漏斗", report.orderFunnel, ["状态", "数量"])}
-    ${reportObjectTable("财务摘要", finance, ["指标", "数值"])}
-    ${reportObjectTable("运营摘要", operations, ["指标", "数值"])}
-    ${storeSummaryTable(report.storeSummary)}
-    ${reportArrayTable("生产负载", productionLoad, ["taskNo", "station", "operatorName", "status", "progressPercent"])}
-    ${reportArrayTable("低库存预警", lowStock, ["sku", "itemName", "category", "quantity", "safetyStock"])}
   `;
   renderTimeline([]);
+}
+
+function reportMetricList(title, rows = []) {
+  if (!rows.length) {
+    return `<section class="aggregate-section report-card"><h3>${escapeHtml(title)}</h3><p class="empty">暂无${escapeHtml(title)}数据</p></section>`;
+  }
+  return `
+    <section class="aggregate-section report-card">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="report-metric-list">
+        ${rows.map(([label, value, column]) => `
+          <div>
+            <span>${escapeHtml(label)}</span>
+            <strong>${formatCell(value, column)}</strong>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function reportObjectTable(title, object = {}, headers = ["项目", "数值"]) {
@@ -248,11 +286,11 @@ function reportObjectTable(title, object = {}, headers = ["项目", "数值"]) {
     return `<section class="aggregate-section wide"><h3>${escapeHtml(title)}</h3><p class="empty">暂无${escapeHtml(title)}数据</p></section>`;
   }
   return `
-    <section class="aggregate-section wide">
+    <section class="aggregate-section report-card">
       <h3>${escapeHtml(title)}</h3>
       <table>
         <thead><tr><th>${escapeHtml(headers[0])}</th><th>${escapeHtml(headers[1])}</th></tr></thead>
-        <tbody>${entries.map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${formatCell(value, key)}</td></tr>`).join("")}</tbody>
+        <tbody>${entries.map(([key, value]) => `<tr><td>${headers[0] === "状态" ? formatCell(key, "status") : escapeHtml(key)}</td><td>${formatCell(value, key)}</td></tr>`).join("")}</tbody>
       </table>
     </section>
   `;
@@ -264,7 +302,7 @@ function storeSummaryTable(summary = {}) {
     return `<section class="aggregate-section wide"><h3>门店汇总</h3><p class="empty">暂无门店汇总数据</p></section>`;
   }
   return `
-    <section class="aggregate-section wide">
+    <section class="aggregate-section report-card">
       <h3>门店汇总</h3>
       <table>
         <thead><tr><th>门店</th><th>订单数</th><th>完成数</th><th>报价金额</th></tr></thead>
@@ -288,7 +326,7 @@ function reportArrayTable(title, items = [], columns = []) {
     return `<section class="aggregate-section wide"><h3>${escapeHtml(title)}</h3><p class="empty">暂无${escapeHtml(title)}数据</p></section>`;
   }
   return `
-    <section class="aggregate-section wide">
+    <section class="aggregate-section report-card">
       <h3>${escapeHtml(title)}</h3>
       <table>
         <thead><tr>${columns.map((column) => `<th>${escapeHtml(labelForColumn(column))}</th>`).join("")}</tr></thead>
