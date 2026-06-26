@@ -42,7 +42,7 @@ export function renderMetrics(metrics) {
   for (const metric of metrics) {
     const card = document.createElement("article");
     card.className = "metric";
-    card.innerHTML = `<span>${metric.label}</span><strong>${metric.value}</strong>`;
+    card.innerHTML = `<span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(format(metric.value))}</strong>`;
     el.metrics.appendChild(card);
   }
 }
@@ -60,13 +60,13 @@ export function renderTable(customColumns, customTitle) {
     return;
   }
   const rows = state.records.map((record) => `
-    <tr data-id="${record.id}" class="${state.selected?.id === record.id ? "selected" : ""}">
-      ${columns.map((column) => `<td>${format(record[column])}</td>`).join("")}
+    <tr data-id="${escapeAttribute(record.id)}" class="${state.selected?.id === record.id ? "selected" : ""}">
+      ${columns.map((column) => `<td class="${cellClass(column, record[column])}">${formatCell(record[column], column)}</td>`).join("")}
     </tr>
   `).join("");
   el.tableWrap.innerHTML = `
     <table>
-      <thead><tr>${columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead>
+      <thead><tr>${columns.map((column) => `<th>${escapeHtml(labelForColumn(column, config))}</th>`).join("")}</tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;
@@ -91,6 +91,11 @@ export function renderForm(handlers) {
   el.recordActions.innerHTML = "";
   if (state.module === "reports") {
     renderReportDetail(record);
+    return;
+  }
+  if (state.module === "orderChangeRequests") {
+    renderChangeRequestDetail(record);
+    renderReadonlyActions(config, handlers);
     return;
   }
   for (const [field, label, type, options] of config.fields || []) {
@@ -145,13 +150,13 @@ export function renderAggregateDetail(handlers) {
   el.detailTitle.textContent = order.orderNo ? `订单聚合详情 · ${order.orderNo}` : "订单聚合详情";
   el.recordForm.innerHTML = `
     <section class="aggregate-summary wide">
-      <div><span>客户</span><strong>${format(order.customerName)}</strong></div>
-      <div><span>状态</span><strong>${format(order.status)}</strong></div>
-      <div><span>付款</span><strong>${format(order.paymentStatus)}</strong></div>
-      <div><span>金额</span><strong>${format(order.totalAmount)}</strong></div>
-      <div><span>产品</span><strong>${format(order.productType)} / ${format(order.colorMode)}</strong></div>
-      <div><span>交付</span><strong>${format(order.deliveryMode)} · ${format(order.priority)}</strong></div>
-      <div class="wide"><span>下一步建议</span><strong>${nextTask ? `${format(nextTask.label)} · ${format(nextTask.hint)}` : "暂无待办，等待其他角色处理"}</strong></div>
+      <div><span>客户</span><strong>${formatCell(order.customerName)}</strong></div>
+      <div><span>状态</span><strong>${formatCell(order.status, "status")}</strong></div>
+      <div><span>付款</span><strong>${formatCell(order.paymentStatus, "paymentStatus")}</strong></div>
+      <div><span>金额</span><strong class="amount-cell">${formatCell(order.totalAmount, "totalAmount")}</strong></div>
+      <div><span>产品</span><strong>${formatCell(order.productType)} / ${formatCell(order.colorMode)}</strong></div>
+      <div><span>交付</span><strong>${formatCell(order.deliveryMode)} · ${formatCell(order.priority)}</strong></div>
+      <div class="wide"><span>下一步建议</span><strong>${nextTask ? `${formatCell(nextTask.label)} · ${formatCell(nextTask.hint)}` : "暂无待办，等待其他角色处理"}</strong></div>
     </section>
     ${aggregateSectionsForRole(aggregate)}
   `;
@@ -173,9 +178,9 @@ export function renderTimeline(audits = []) {
   }
   el.timeline.innerHTML = audits.slice(0, 8).map((item) => `
     <article>
-      <strong>${item.action || "-"}</strong>
-      <span>${item.operator || "-"} · ${item.role || "-"} · ${format(item.createdAt)}</span>
-      <p>${item.detail || ""}</p>
+      <strong>${formatCell(item.action)}</strong>
+      <span>${formatCell(item.operator)} · ${formatCell(item.role)} · ${formatCell(item.createdAt)}</span>
+      <p>${formatCell(item.detail)}</p>
     </article>
   `).join("");
 }
@@ -206,7 +211,7 @@ function renderReportIndex() {
   el.tableWrap.innerHTML = `
     <table>
       <thead><tr><th>指标</th><th>数值</th></tr></thead>
-      <tbody>${rows.map(([label, value]) => `<tr><td>${label}</td><td>${format(value)}</td></tr>`).join("")}</tbody>
+      <tbody>${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${formatCell(value)}</td></tr>`).join("")}</tbody>
     </table>
   `;
 }
@@ -220,12 +225,12 @@ function renderReportDetail(report = {}) {
   const productionLoad = Array.isArray(report.productionLoad) ? report.productionLoad : [];
   el.recordForm.innerHTML = `
     <section class="aggregate-summary wide">
-      <div><span>订单总数</span><strong>${format(operations.totalOrders ?? 0)}</strong></div>
-      <div><span>已完成</span><strong>${format(operations.completedOrders ?? 0)}</strong></div>
-      <div><span>活跃订单</span><strong>${format(operations.activeOrders ?? 0)}</strong></div>
-      <div><span>收款金额</span><strong>${format(finance.paidAmount ?? 0)}</strong></div>
-      <div><span>退款金额</span><strong>${format(finance.refundAmount ?? 0)}</strong></div>
-      <div><span>已开票</span><strong>${format(finance.issuedInvoiceCount ?? 0)}</strong></div>
+      <div><span>订单总数</span><strong>${formatCell(operations.totalOrders ?? 0)}</strong></div>
+      <div><span>已完成</span><strong>${formatCell(operations.completedOrders ?? 0)}</strong></div>
+      <div><span>活跃订单</span><strong>${formatCell(operations.activeOrders ?? 0)}</strong></div>
+      <div><span>收款金额</span><strong class="amount-cell">${formatCell(finance.paidAmount ?? 0, "paidAmount")}</strong></div>
+      <div><span>退款金额</span><strong class="amount-cell">${formatCell(finance.refundAmount ?? 0, "refundAmount")}</strong></div>
+      <div><span>已开票</span><strong>${formatCell(finance.issuedInvoiceCount ?? 0)}</strong></div>
     </section>
     ${reportObjectTable("订单漏斗", report.orderFunnel, ["状态", "数量"])}
     ${reportObjectTable("财务摘要", finance, ["指标", "数值"])}
@@ -240,14 +245,14 @@ function renderReportDetail(report = {}) {
 function reportObjectTable(title, object = {}, headers = ["项目", "数值"]) {
   const entries = Object.entries(object || {});
   if (!entries.length) {
-    return `<section class="aggregate-section wide"><h3>${title}</h3><p class="empty">暂无${title}数据</p></section>`;
+    return `<section class="aggregate-section wide"><h3>${escapeHtml(title)}</h3><p class="empty">暂无${escapeHtml(title)}数据</p></section>`;
   }
   return `
     <section class="aggregate-section wide">
-      <h3>${title}</h3>
+      <h3>${escapeHtml(title)}</h3>
       <table>
-        <thead><tr><th>${headers[0]}</th><th>${headers[1]}</th></tr></thead>
-        <tbody>${entries.map(([key, value]) => `<tr><td>${key}</td><td>${format(value)}</td></tr>`).join("")}</tbody>
+        <thead><tr><th>${escapeHtml(headers[0])}</th><th>${escapeHtml(headers[1])}</th></tr></thead>
+        <tbody>${entries.map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${formatCell(value, key)}</td></tr>`).join("")}</tbody>
       </table>
     </section>
   `;
@@ -266,10 +271,10 @@ function storeSummaryTable(summary = {}) {
         <tbody>
           ${entries.map(([storeName, stats]) => `
             <tr>
-              <td>${storeName}</td>
-              <td>${format(stats.orderCount ?? 0)}</td>
-              <td>${format(stats.completedCount ?? 0)}</td>
-              <td>${format(stats.quotedAmount ?? 0)}</td>
+              <td>${escapeHtml(storeName)}</td>
+              <td>${formatCell(stats.orderCount ?? 0)}</td>
+              <td>${formatCell(stats.completedCount ?? 0)}</td>
+              <td class="cell-amount">${formatCell(stats.quotedAmount ?? 0, "quotedAmount")}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -280,14 +285,14 @@ function storeSummaryTable(summary = {}) {
 
 function reportArrayTable(title, items = [], columns = []) {
   if (!items.length) {
-    return `<section class="aggregate-section wide"><h3>${title}</h3><p class="empty">暂无${title}数据</p></section>`;
+    return `<section class="aggregate-section wide"><h3>${escapeHtml(title)}</h3><p class="empty">暂无${escapeHtml(title)}数据</p></section>`;
   }
   return `
     <section class="aggregate-section wide">
-      <h3>${title}</h3>
+      <h3>${escapeHtml(title)}</h3>
       <table>
-        <thead><tr>${columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead>
-        <tbody>${items.slice(0, 8).map((item) => `<tr>${columns.map((column) => `<td>${format(item[column])}</td>`).join("")}</tr>`).join("")}</tbody>
+        <thead><tr>${columns.map((column) => `<th>${escapeHtml(labelForColumn(column))}</th>`).join("")}</tr></thead>
+        <tbody>${items.slice(0, 8).map((item) => `<tr>${columns.map((column) => `<td class="${cellClass(column, item[column])}">${formatCell(item[column], column)}</td>`).join("")}</tr>`).join("")}</tbody>
       </table>
     </section>
   `;
@@ -295,15 +300,15 @@ function reportArrayTable(title, items = [], columns = []) {
 
 function aggregateSection(title, items = [], columns = []) {
   if (!items.length) {
-    return `<section class="aggregate-section wide"><h3>${title}</h3><p class="empty">暂无${title}记录</p></section>`;
+    return `<section class="aggregate-section wide"><h3>${escapeHtml(title)}</h3><p class="empty">暂无${escapeHtml(title)}记录</p></section>`;
   }
   return `
     <section class="aggregate-section wide">
-      <h3>${title}</h3>
+      <h3>${escapeHtml(title)}</h3>
       <table>
-        <thead><tr>${columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead>
+        <thead><tr>${columns.map((column) => `<th>${escapeHtml(labelForColumn(column))}</th>`).join("")}</tr></thead>
         <tbody>
-          ${items.slice(0, 6).map((item) => `<tr>${columns.map((column) => `<td>${format(item[column])}</td>`).join("")}</tr>`).join("")}
+          ${items.slice(0, 6).map((item) => `<tr>${columns.map((column) => `<td class="${cellClass(column, item[column])}">${formatCell(item[column], column)}</td>`).join("")}</tr>`).join("")}
         </tbody>
       </table>
     </section>
@@ -348,9 +353,74 @@ function progressSection(aggregate) {
     <section class="aggregate-section wide">
       <h3>进度</h3>
       <table>
-        <tbody>${items.map((item) => `<tr><th>${item.label}</th><td>${format(item.value)}</td></tr>`).join("")}</tbody>
+        <tbody>${items.map((item) => `<tr><th>${escapeHtml(item.label)}</th><td>${formatCell(item.value)}</td></tr>`).join("")}</tbody>
       </table>
     </section>
+  `;
+}
+
+function renderChangeRequestDetail(record = {}) {
+  renderTimeline([]);
+  if (!state.selected) {
+    el.recordForm.innerHTML = "<p class=\"empty wide\">暂无订单变更记录</p>";
+    return;
+  }
+  const compareItems = [
+    ["产品类型", "oldProductType", "newProductType"],
+    ["颜色/工艺", "oldColorMode", "newColorMode"],
+    ["页数", "oldPageCount", "newPageCount"],
+    ["份数", "oldCopies", "newCopies"],
+    ["交付方式", "oldDeliveryMode", "newDeliveryMode"],
+    ["优先级", "oldPriority", "newPriority"],
+    ["金额", "oldAmount", "newAmount", "amountDelta"],
+  ];
+  el.recordForm.innerHTML = `
+    <section class="aggregate-summary wide">
+      <div><span>变更编号</span><strong>${formatCell(record.requestNo)}</strong></div>
+      <div><span>订单号</span><strong>${formatCell(record.orderNo)}</strong></div>
+      <div><span>发起人</span><strong>${formatCell(record.requestedBy)} · ${formatCell(record.requesterRole)}</strong></div>
+      <div><span>状态</span><strong>${formatCell(record.status, "status")}</strong></div>
+      <div><span>金额差异</span><strong class="amount-cell">${formatCell(record.amountDelta, "amountDelta")}</strong></div>
+      <div><span>审批人</span><strong>${formatCell(record.approvedBy)}</strong></div>
+    </section>
+    <section class="aggregate-section change-compare wide">
+      <h3>变更对比</h3>
+      <div class="change-compare-grid">
+        ${compareItems.map(([label, oldField, newField, deltaField]) => changeCompareItem(label, record[oldField], record[newField], deltaField ? record[deltaField] : null, newField)).join("")}
+      </div>
+    </section>
+    <section class="aggregate-section wide">
+      <h3>说明与审批</h3>
+      <div class="change-compare">
+        <div class="change-note"><span>变更原因</span><strong>${formatCell(record.reason)}</strong></div>
+        <div class="change-note"><span>审批意见</span><strong>${formatCell(record.decisionComment)}</strong></div>
+      </div>
+    </section>
+  `;
+}
+
+function renderReadonlyActions(config, handlers) {
+  for (const [label, method, pathFactory, body, actionKey] of config.actions || []) {
+    if (state.selected?.id && !state.editing) {
+      if (actionKey && !(actionRoles[actionKey] || []).includes(state.user?.role)) {
+        continue;
+      }
+      addAction(label, () => handlers.runRecordAction(method, pathFactory(state.selected.id), body || {}));
+    }
+  }
+}
+
+function changeCompareItem(label, oldValue, newValue, deltaValue, column) {
+  const delta = deltaValue === null || deltaValue === undefined
+    ? ""
+    : `<span>差异</span><strong class="amount-cell">${formatCell(deltaValue, "amountDelta")}</strong>`;
+  return `
+    <div class="change-compare-item">
+      <span>${escapeHtml(label)}</span>
+      <strong class="old">${formatCell(oldValue, column)}</strong>
+      <strong class="new">${formatCell(newValue, column)}</strong>
+      ${delta}
+    </div>
   `;
 }
 
@@ -401,4 +471,106 @@ function addAction(label, handler, cls = "") {
     }
   });
   el.recordActions.appendChild(button);
+}
+
+function labelForColumn(column, config = null) {
+  const field = (config?.fields || []).find(([name]) => name === column);
+  if (field) return field[1];
+  for (const moduleConfig of Object.values(modules)) {
+    const moduleField = (moduleConfig.fields || []).find(([name]) => name === column);
+    if (moduleField) return moduleField[1];
+  }
+  const labels = {
+    actionLabel: "待办动作",
+    amountDelta: "金额差异",
+    carrierName: "承运人",
+    currentStep: "当前步骤",
+    customerName: "客户",
+    fileName: "文件名",
+    fileStatus: "文件状态",
+    finalAmount: "最终金额",
+    invoiceNo: "发票号",
+    itemName: "物料名称",
+    orderId: "订单ID",
+    orderNo: "订单号",
+    paidAmount: "收款金额",
+    paymentNo: "付款号",
+    progressPercent: "进度%",
+    qualityStatus: "质检状态",
+    quoteNo: "报价号",
+    quotedAmount: "报价金额",
+    refundAmount: "退款金额",
+    requestNo: "变更编号",
+    requestedBy: "发起人",
+    requesterRole: "发起角色",
+    station: "工位/设备",
+    status: "状态",
+    taskNo: "任务号",
+    ticketNo: "作业单号",
+    title: "任务",
+    uploadedAt: "上传时间",
+  };
+  return labels[column] || column;
+}
+
+function formatCell(value, column = "") {
+  const display = format(value);
+  const safe = escapeHtml(display);
+  if (isStatusColumn(column)) {
+    return `<span class="status-pill ${statusClass(display)}">${safe}</span>`;
+  }
+  if (column === "progressPercent") {
+    const progress = Math.max(0, Math.min(100, Number(value) || 0));
+    return `<span class="progress-cell" style="--progress: ${progress}%"><span>${safe}%</span></span>`;
+  }
+  if (isAmountColumn(column)) {
+    return `<span class="amount-cell">${safe}</span>`;
+  }
+  return safe;
+}
+
+function cellClass(column, value) {
+  const classes = [];
+  if (typeof value === "number") classes.push("cell-number");
+  if (isAmountColumn(column)) classes.push("cell-amount");
+  if (column === "progressPercent") classes.push("cell-progress");
+  return classes.join(" ");
+}
+
+function isStatusColumn(column) {
+  return /(^status$|Status$|status$)/.test(column);
+}
+
+function isAmountColumn(column) {
+  return /(amount|delta|total|subtotal|paid|refund|final|quoted)/i.test(column);
+}
+
+function statusClass(value) {
+  const status = String(value || "").toUpperCase();
+  if (/(DONE|PAID|APPROVED|CONFIRMED|COMPLETED|SIGNED|ISSUED|PASS)/.test(status)) {
+    return "status-good";
+  }
+  if (/(CANCELLED|REJECTED|REFUNDED|FAILED|VOID)/.test(status)) {
+    return "status-bad";
+  }
+  if (/(PENDING|SUBMITTED|REVIEWING|QUOTED|JOB_READY|UNPAID|PARTIAL)/.test(status)) {
+    return "status-warn";
+  }
+  if (/(PRODUCTION|DELIVERING|ACTIVE|PROCESS|READY|ACCEPTED)/.test(status)) {
+    return "status-active";
+  }
+  return "";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(format(value));
 }
