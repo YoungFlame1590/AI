@@ -15,9 +15,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageTypeSpecifier;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.metadata.IIOMetadataNode;
+import javax.imageio.stream.ImageOutputStream;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,7 +70,8 @@ class PrintshopV2SystemTests {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"admin\",\"password\":\"wrong\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("用户名或密码错误。"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -99,6 +113,12 @@ class PrintshopV2SystemTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"%s\",\"password\":\"demo123\",\"displayName\":\"重复\"}".formatted(customerName)))
                 .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"%s_2\",\"password\":\"demo123\",\"displayName\":\"新客户\"}".formatted(customerName)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("显示名称已存在")));
 
         String storeCode = "STORE-T-" + Long.toString(System.nanoTime(), 36).toUpperCase();
         MvcResult store = mockMvc.perform(post("/api/admin/stores")
@@ -146,14 +166,27 @@ class PrintshopV2SystemTests {
         mockMvc.perform(get("/api/orders").with(httpBasic(clerkName, "demo456")))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(put("/api/admin/users/{id}", clerkId)
+        mockMvc.perform(delete("/api/admin/users/{id}", clerkId)
                         .with(httpBasic("admin", "demo123"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"active\":false}"))
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.active").value(false));
         mockMvc.perform(get("/api/orders").with(httpBasic(clerkName, "demo456")))
                 .andExpect(status().isUnauthorized());
+
+        MvcResult currentAdmin = mockMvc.perform(get("/api/me").with(httpBasic("admin", "demo123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        Integer adminId = JsonPath.read(currentAdmin.getResponse().getContentAsString(), "$.data.user.id");
+        mockMvc.perform(delete("/api/admin/users/{id}", adminId).with(httpBasic("admin", "demo123")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("当前登录账号")));
+        mockMvc.perform(put("/api/admin/users/{id}", adminId)
+                        .with(httpBasic("admin", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\":false}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("当前登录账号")));
     }
 
     @Test
@@ -278,6 +311,7 @@ class PrintshopV2SystemTests {
     void shouldRequireQuoteConfirmationAndBlockProductionWhenInventoryIsInsufficient() throws Exception {
         MvcResult order = createOrder("customer", "论文胶装", "黑白", 20, 3, "到店自提", "普通");
         Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+        uploadOrderFile(orderId, "customer");
 
         mockMvc.perform(post("/api/orders/{id}/status", orderId)
                         .with(httpBasic("customer", "demo123"))
@@ -332,6 +366,7 @@ class PrintshopV2SystemTests {
                 .andExpect(jsonPath("$.data.versionNo").value(1))
                 .andExpect(jsonPath("$.data.uploadedBy").value("张同学"))
                 .andExpect(jsonPath("$.data.reviewStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.analysisStatus").value("FAILED"))
                 .andReturn();
         Integer fileId = JsonPath.read(uploaded.getResponse().getContentAsString(), "$.data.id");
         String filePath = JsonPath.read(uploaded.getResponse().getContentAsString(), "$.data.filePath");
@@ -359,6 +394,7 @@ class PrintshopV2SystemTests {
                         .with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.versionNo").value(2))
+                .andExpect(jsonPath("$.data.analysisStatus").value("UNSUPPORTED"))
                 .andReturn();
         Integer docxFileId = JsonPath.read(docxUpload.getResponse().getContentAsString(), "$.data.id");
         mockMvc.perform(get("/api/order-files/{fileId}/preview", docxFileId)
@@ -381,6 +417,124 @@ class PrintshopV2SystemTests {
         mockMvc.perform(get("/api/order-files/{fileId}/download", fileId)
                         .with(httpBasic("customer", "demo123")))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldAnalyzeFilesAndUpdateOnlySubmittedOrders() throws Exception {
+        MvcResult order = createOrder("customer", "培训手册", "黑白", 7, 2, "到店自提", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+
+        MockMultipartFile mixedPdf = new MockMultipartFile(
+                "file",
+                "mixed-pages.pdf",
+                "application/pdf",
+                pdfBytes(PDRectangle.A4, PDRectangle.A5, PDRectangle.A5)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(mixedPdf)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("DETECTED"))
+                .andExpect(jsonPath("$.data.detectedPageCount").value(3))
+                .andExpect(jsonPath("$.data.detectedWidthMm").value(210.0))
+                .andExpect(jsonPath("$.data.detectedHeightMm").value(297.0))
+                .andExpect(jsonPath("$.data.mixedPageSizes").value(true))
+                .andExpect(jsonPath("$.data.analysisMessage").value(containsString("金额已重新计算")));
+
+        mockMvc.perform(get("/api/orders/{id}", orderId).with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageCount").value(3))
+                .andExpect(jsonPath("$.data.currentStep").value(containsString("已识别 3 页")));
+
+        MockMultipartFile png = new MockMultipartFile(
+                "file",
+                "poster.png",
+                "image/png",
+                pngBytes(320, 240, 96)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(png)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("DETECTED"))
+                .andExpect(jsonPath("$.data.detectedPageCount").value(1))
+                .andExpect(jsonPath("$.data.detectedPixelWidth").value(320))
+                .andExpect(jsonPath("$.data.detectedPixelHeight").value(240))
+                .andExpect(jsonPath("$.data.detectedDpiX").exists())
+                .andExpect(jsonPath("$.data.detectedDpiY").exists());
+
+        MockMultipartFile unsupported = new MockMultipartFile(
+                "file",
+                "source.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "office".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(unsupported)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("UNSUPPORTED"))
+                .andExpect(jsonPath("$.data.detectedPageCount").doesNotExist());
+
+        MockMultipartFile brokenPdf = new MockMultipartFile(
+                "file",
+                "broken.pdf",
+                "application/pdf",
+                "not-a-pdf".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(brokenPdf)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("FAILED"))
+                .andExpect(jsonPath("$.data.analysisMessage").value(containsString("文件分析失败")));
+
+        mockMvc.perform(post("/api/orders/{id}/status", orderId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"REVIEWING\",\"step\":\"客户已提交审核\"}"))
+                .andExpect(status().isOk());
+
+        MockMultipartFile reviewedPdf = new MockMultipartFile(
+                "file",
+                "reviewed-version.pdf",
+                "application/pdf",
+                pdfBytes(PDRectangle.A4, PDRectangle.A4, PDRectangle.A4, PDRectangle.A4)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(reviewedPdf)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.detectedPageCount").value(4))
+                .andExpect(jsonPath("$.data.analysisMessage").value(containsString("未自动修改")));
+
+        mockMvc.perform(get("/api/orders/{id}", orderId).with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageCount").value(1));
+    }
+
+    @Test
+    void shouldRecordOverLimitPdfWithoutUpdatingOrder() throws Exception {
+        MvcResult order = createOrder("customer", "培训手册", "黑白", 7, 1, "到店自提", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+        MockMultipartFile pdf = new MockMultipartFile(
+                "file",
+                "too-many-pages.pdf",
+                "application/pdf",
+                pdfBytes(5001, PDRectangle.A6)
+        );
+
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(pdf)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("DETECTED"))
+                .andExpect(jsonPath("$.data.detectedPageCount").value(5001))
+                .andExpect(jsonPath("$.data.analysisMessage").value(containsString("超出订单上限")));
+
+        mockMvc.perform(get("/api/orders/{id}", orderId).with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageCount").value(7));
     }
 
     @Test
@@ -595,8 +749,34 @@ class PrintshopV2SystemTests {
 
         mockMvc.perform(get("/api/workbench/tasks").with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.tasks[0].action").value("SUBMIT_REVIEW"))
+                .andExpect(jsonPath("$.data.tasks[0].action").value("UPLOAD_FILE"))
                 .andExpect(jsonPath("$.data.tasks[0].orderId").value(orderId));
+
+        mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "SUBMIT_REVIEW")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("请先上传订单文件，再提交审核。"));
+
+        mockMvc.perform(post("/api/orders/{id}/status", orderId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"REVIEWING\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("请先上传订单文件，再提交审核。"));
+
+        mockMvc.perform(put("/api/orders/{id}", orderId)
+                        .with(httpBasic("admin", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"REVIEWING\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("请先上传订单文件，再提交审核。"));
+
+        uploadOrderFile(orderId, "customer");
+        mockMvc.perform(get("/api/workbench/tasks").with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tasks[0].action").value("SUBMIT_REVIEW"));
 
         mockMvc.perform(post("/api/orders/{orderId}/workflow/actions/{action}", orderId, "SUBMIT_REVIEW")
                         .with(httpBasic("customer", "demo123"))
@@ -763,7 +943,53 @@ class PrintshopV2SystemTests {
                 .andReturn();
     }
 
+    private byte[] pdfBytes(PDRectangle... pageSizes) throws Exception {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            for (PDRectangle pageSize : pageSizes) {
+                document.addPage(new PDPage(pageSize));
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private byte[] pdfBytes(int pageCount, PDRectangle pageSize) throws Exception {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            for (int index = 0; index < pageCount; index++) {
+                document.addPage(new PDPage(pageSize));
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private byte[] pngBytes(int width, int height, int dpi) throws Exception {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("png").next();
+        ImageWriteParam parameters = writer.getDefaultWriteParam();
+        ImageTypeSpecifier type = ImageTypeSpecifier.createFromRenderedImage(image);
+        IIOMetadata metadata = writer.getDefaultImageMetadata(type, parameters);
+        IIOMetadataNode root = new IIOMetadataNode("javax_imageio_png_1.0");
+        IIOMetadataNode physical = new IIOMetadataNode("pHYs");
+        int pixelsPerMeter = (int) Math.round(dpi / 0.0254);
+        physical.setAttribute("pixelsPerUnitXAxis", String.valueOf(pixelsPerMeter));
+        physical.setAttribute("pixelsPerUnitYAxis", String.valueOf(pixelsPerMeter));
+        physical.setAttribute("unitSpecifier", "meter");
+        root.appendChild(physical);
+        metadata.mergeTree("javax_imageio_png_1.0", root);
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+             ImageOutputStream imageOutput = ImageIO.createImageOutputStream(output)) {
+            writer.setOutput(imageOutput);
+            writer.write(null, new IIOImage(image, null, metadata), parameters);
+            imageOutput.flush();
+            return output.toByteArray();
+        } finally {
+            writer.dispose();
+        }
+    }
+
     private void progressToQuoted(Integer orderId) throws Exception {
+        uploadOrderFile(orderId, "customer");
         mockMvc.perform(post("/api/orders/{id}/status", orderId)
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -773,6 +999,19 @@ class PrintshopV2SystemTests {
                         .with(httpBasic("clerk", "demo123")))
                 .andExpect(status().isOk());
         confirmQuote(orderId);
+    }
+
+    private void uploadOrderFile(Integer orderId, String username) throws Exception {
+        MockMultipartFile upload = new MockMultipartFile(
+                "file",
+                "order-" + orderId + ".pdf",
+                "application/pdf",
+                "print-ready".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(upload)
+                        .with(httpBasic(username, "demo123")))
+                .andExpect(status().isOk());
     }
 
     private void confirmQuote(Integer orderId) throws Exception {

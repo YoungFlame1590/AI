@@ -68,11 +68,12 @@ public class IdentityService {
         if (users.existsByUsername(request.username())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "用户名已存在。");
         }
+        String displayName = requireUniqueDisplayName(request.displayName(), null);
         UserAccount account = new UserAccount();
         account.username = request.username().trim();
         account.password = passwordEncoder.encode(request.password());
         account.role = "CUSTOMER";
-        account.displayName = text(request.displayName(), account.username);
+        account.displayName = displayName;
         account.storeId = requireActiveStoreId(request.storeId(), true);
         account.active = true;
         UserAccount saved = users.save(account);
@@ -88,11 +89,12 @@ public class IdentityService {
         if (users.existsByUsername(request.username())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "用户名已存在。");
         }
+        String displayName = requireUniqueDisplayName(request.displayName(), null);
         UserAccount account = new UserAccount();
         account.username = request.username().trim();
         account.password = passwordEncoder.encode(request.password());
         account.role = normalizeRole(request.role());
-        account.displayName = text(request.displayName(), account.username);
+        account.displayName = displayName;
         account.storeId = requireStoreForRole(account.role, request.storeId());
         account.active = request.active() == null || request.active();
         UserAccount saved = users.save(account);
@@ -102,17 +104,29 @@ public class IdentityService {
 
     @Transactional
     public UserAccount updateUser(String username, Long id, AdminUserUpdate request) {
-        requireAdmin(username);
+        UserAccount current = requireAdmin(username);
         UserAccount account = users.findById(id).orElseThrow(() -> notFound("用户", id));
-        if (request.role() != null) {
-            account.role = normalizeRole(request.role());
+        String nextRole = request.role() == null ? account.role : normalizeRole(request.role());
+        boolean nextActive = request.active() == null ? account.active : request.active();
+        if (current.id.equals(account.id) && (!nextActive || !"ADMIN".equals(nextRole))) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "不能停用当前登录账号或移除其管理员角色。");
         }
-        account.displayName = text(request.displayName(), account.displayName);
+        if (account.active && "ADMIN".equals(account.role)
+                && (!nextActive || !"ADMIN".equals(nextRole))
+                && users.countByRoleAndActiveTrue("ADMIN") <= 1) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "系统必须至少保留一个启用的管理员账号。");
+        }
+        if (request.role() != null) {
+            account.role = nextRole;
+        }
+        if (request.displayName() != null) {
+            account.displayName = requireUniqueDisplayName(request.displayName(), account.id);
+        }
         if (request.storeId() != null || Set.of("CUSTOMER", "CLERK", "MANAGER").contains(account.role)) {
             account.storeId = requireStoreForRole(account.role, request.storeId() == null ? account.storeId : request.storeId());
         }
         if (request.active() != null) {
-            account.active = request.active();
+            account.active = nextActive;
         }
         audit.record(username, "AUTH", "UPDATE_USER", "USER", account.id, account.username);
         return users.save(account);
@@ -125,6 +139,21 @@ public class IdentityService {
         UserAccount account = users.findById(id).orElseThrow(() -> notFound("用户", id));
         account.password = passwordEncoder.encode(request.password());
         audit.record(username, "AUTH", "RESET_PASSWORD", "USER", account.id, account.username);
+        return users.save(account);
+    }
+
+    @Transactional
+    public UserAccount deleteUser(String username, Long id) {
+        UserAccount current = requireAdmin(username);
+        UserAccount account = users.findById(id).orElseThrow(() -> notFound("用户", id));
+        if (current.id.equals(account.id)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "不能停用当前登录账号。");
+        }
+        if (account.active && "ADMIN".equals(account.role) && users.countByRoleAndActiveTrue("ADMIN") <= 1) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "系统必须至少保留一个启用的管理员账号。");
+        }
+        account.active = false;
+        audit.record(username, "AUTH", "DEACTIVATE_USER", "USER", account.id, account.username);
         return users.save(account);
     }
 
@@ -173,11 +202,12 @@ public class IdentityService {
         return stores.findById(storeId).map(store -> store.name).orElse("未知门店");
     }
 
-    private void requireAdmin(String username) {
+    private UserAccount requireAdmin(String username) {
         UserAccount current = requireUser(username);
         if (!"ADMIN".equals(current.role)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "只有系统管理员可以执行该操作。");
         }
+        return current;
     }
 
     private Long requireActiveStoreId(Long storeId, boolean allowNullDefault) {
@@ -225,6 +255,22 @@ public class IdentityService {
         if (password == null || password.length() < 6 || password.length() > 64) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "密码需为 6-64 位。");
         }
+    }
+
+    private String requireUniqueDisplayName(String displayName, Long currentId) {
+        if (displayName == null || displayName.isBlank()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "显示名称不能为空。");
+        }
+        String normalized = displayName.trim();
+        if (normalized.length() > 100) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "显示名称不能超过 100 个字符。");
+        }
+        users.findByDisplayNameIgnoreCase(normalized).ifPresent(existing -> {
+            if (!existing.id.equals(currentId)) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "显示名称已存在，请更换后重试。");
+            }
+        });
+        return normalized;
     }
 
     private void validateStoreCode(String code, Long currentId) {

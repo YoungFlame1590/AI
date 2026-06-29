@@ -141,6 +141,7 @@ class PrintshopV1ApplicationTests {
         Integer courierOrderId = JsonPath.read(courierVisibleOrder.getResponse().getContentAsString(), "$.data.id");
         String courierOrderNo = JsonPath.read(courierVisibleOrder.getResponse().getContentAsString(), "$.data.orderNo");
 
+        uploadOrderFile(courierOrderId);
         mockMvc.perform(post("/api/orders/{id}/status", courierOrderId)
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -468,6 +469,7 @@ class PrintshopV1ApplicationTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("请先提交审核")));
 
+        uploadOrderFile(orderId);
         mockMvc.perform(post("/api/orders/{id}/status", orderId)
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -624,6 +626,7 @@ class PrintshopV1ApplicationTests {
                 .andReturn();
         Integer orderId = JsonPath.read(orderResult.getResponse().getContentAsString(), "$.data.id");
 
+        uploadOrderFile(orderId);
         mockMvc.perform(post("/api/orders/{id}/status", orderId)
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -732,6 +735,19 @@ class PrintshopV1ApplicationTests {
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    private void uploadOrderFile(Integer orderId) throws Exception {
+        MockMultipartFile upload = new MockMultipartFile(
+                "file",
+                "order-" + orderId + ".pdf",
+                "application/pdf",
+                "print-ready".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(upload)
+                        .with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk());
     }
 }

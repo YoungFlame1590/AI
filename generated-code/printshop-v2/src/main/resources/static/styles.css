@@ -131,6 +131,16 @@ textarea:focus-visible {
   line-height: 1.6;
 }
 
+.login-card .auth-message {
+  margin: 0;
+  border: 1px solid #e0b6b6;
+  border-radius: 6px;
+  background: #fff2f2;
+  color: var(--bad);
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -499,6 +509,129 @@ tr.selected {
 
 .aggregate-section h3 {
   margin: 0 0 8px;
+}
+
+.file-record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.file-record {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+}
+
+.file-record-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-record-head > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.file-version {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid #b9d2f0;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #255f9c;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.file-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.file-meta div {
+  min-width: 0;
+}
+
+.file-meta span,
+.file-meta strong {
+  display: block;
+}
+
+.file-meta span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.file-meta strong {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.file-record .file-actions {
+  justify-content: flex-end;
+}
+
+.file-analysis {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+  padding: 9px;
+}
+
+.file-analysis > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.file-analysis > header > span,
+.file-analysis-grid span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.file-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.file-analysis-grid span,
+.file-analysis-grid strong {
+  display: block;
+}
+
+.file-analysis-grid strong {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.file-analysis p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.file-analysis p.analysis-warning {
+  color: var(--warn);
+  font-weight: 600;
 }
 
 .report-dashboard {

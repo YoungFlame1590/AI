@@ -17,6 +17,7 @@ export const el = {
   username: document.querySelector("#username"),
   password: document.querySelector("#password"),
   displayName: document.querySelector("#displayName"),
+  authMessage: document.querySelector("#authMessage"),
   registerModeBtn: document.querySelector("#registerModeBtn"),
   currentUser: document.querySelector("#currentUser"),
   clearDataBtn: document.querySelector("#clearDataBtn"),

@@ -9,6 +9,7 @@ import com.printshop.mis.identity.IdentityService.ResetPasswordRequest;
 import com.printshop.mis.identity.IdentityService.StoreRequest;
 import com.printshop.mis.shared.ApiSupport;
 import java.security.Principal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -70,6 +71,11 @@ public class IdentityController {
     @PostMapping("/api/admin/users/{id}/reset-password")
     public ApiResponse<?> resetPassword(Principal principal, @PathVariable Long id, @RequestBody ResetPasswordRequest request) {
         return api.ok(identityService.resetPassword(principal.getName(), id, request));
+    }
+
+    @DeleteMapping("/api/admin/users/{id}")
+    public ApiResponse<?> deleteUser(Principal principal, @PathVariable Long id) {
+        return api.ok(identityService.deleteUser(principal.getName(), id));
     }
 
     @GetMapping("/api/admin/stores")

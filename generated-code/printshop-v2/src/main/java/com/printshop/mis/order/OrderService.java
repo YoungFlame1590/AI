@@ -15,6 +15,7 @@ import com.printshop.mis.domain.UserAccount;
 import com.printshop.mis.identity.IdentityService;
 import com.printshop.mis.repository.OrderFileRepository;
 import com.printshop.mis.repository.PrintOrderRepository;
+import com.printshop.mis.order.OrderFileAnalysisService.AnalysisResult;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.MalformedURLException;
@@ -53,6 +54,7 @@ public class OrderService {
     private final OrderPricingPolicy pricing;
     private final OrderAccessPolicy access;
     private final OrderStatusPolicy statusPolicy;
+    private final OrderFileAnalysisService fileAnalysis;
     private final Path uploadRoot;
 
     public OrderService(
@@ -63,6 +65,7 @@ public class OrderService {
             OrderPricingPolicy pricing,
             OrderAccessPolicy access,
             OrderStatusPolicy statusPolicy,
+            OrderFileAnalysisService fileAnalysis,
             @Value("${printshop.upload-dir:uploads}") String uploadDir
     ) {
         this.identityService = identityService;
@@ -72,6 +75,7 @@ public class OrderService {
         this.pricing = pricing;
         this.access = access;
         this.statusPolicy = statusPolicy;
+        this.fileAnalysis = fileAnalysis;
         this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -139,6 +143,7 @@ public class OrderService {
         UserAccount user = identityService.requireUser(username);
         PrintOrder order = access.requireVisibleOrder(user, id);
         String requestedStatus = text(asString(payload.get("status")), order.status);
+        requireFileBeforeReview(order, requestedStatus);
         if ("CUSTOMER".equals(user.role)) {
             if (!OrderStatusPolicy.REVIEWING.equals(requestedStatus) || !OrderAccessPolicy.EARLY_ORDER_STATUSES.contains(order.status)) {
                 throw forbidden("客户只能将早期订单提交审核。");
@@ -189,12 +194,17 @@ public class OrderService {
             file.uploadedBy = user.displayName;
             file.uploadedRole = user.role;
             file.reviewStatus = "PENDING";
+            AnalysisResult analysis = fileAnalysis.analyze(target, extension);
+            applyAnalysis(file, analysis);
             file.uploadedAt = now();
-            order.currentStep = "文件已上传，等待文件检查";
+            applyAnalysisToOrder(username, order, file);
             order.updatedAt = now();
             orders.save(order);
+            OrderFile saved = files.save(file);
             audit.record(username, "ORD", "UPLOAD_FILE", "ORDER_FILE", orderId, file.fileName);
-            return files.save(file);
+            audit.record(username, "ORD", "ANALYZE_FILE", "ORDER_FILE", saved.id,
+                    file.analysisStatus + " - " + file.analysisMessage);
+            return saved;
         } catch (IOException ex) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "文件保存失败：" + ex.getMessage());
         }
@@ -265,6 +275,7 @@ public class OrderService {
         }
         if (allowed.contains("status") && request.status != null) {
             if (!Objects.equals(request.status, order.status)) {
+                requireFileBeforeReview(order, request.status);
                 statusPolicy.assertManualTransition(order, request.status);
             }
             order.status = text(request.status, order.status);
@@ -330,6 +341,57 @@ public class OrderService {
         OrderFile file = files.findById(fileId).orElseThrow(() -> com.printshop.mis.shared.MisSupport.notFound("订单文件", fileId));
         access.requireVisibleOrder(user, file.orderId);
         return file;
+    }
+
+    private void applyAnalysis(OrderFile file, AnalysisResult analysis) {
+        file.analysisStatus = analysis.status();
+        file.detectedPageCount = analysis.pageCount();
+        file.detectedWidthMm = analysis.widthMm();
+        file.detectedHeightMm = analysis.heightMm();
+        file.detectedPixelWidth = analysis.pixelWidth();
+        file.detectedPixelHeight = analysis.pixelHeight();
+        file.detectedDpiX = analysis.dpiX();
+        file.detectedDpiY = analysis.dpiY();
+        file.mixedPageSizes = analysis.mixedPageSizes();
+        file.analysisMessage = analysis.message();
+        file.analyzedAt = now();
+    }
+
+    private void applyAnalysisToOrder(String username, PrintOrder order, OrderFile file) {
+        Integer detectedPages = file.detectedPageCount;
+        boolean validPageCount = detectedPages != null && detectedPages >= 1 && detectedPages <= 5000;
+        if ("DETECTED".equals(file.analysisStatus) && validPageCount && OrderStatusPolicy.SUBMITTED.equals(order.status)) {
+            Integer oldPageCount = order.pageCount;
+            order.pageCount = detectedPages;
+            order.totalAmount = pricing.calculate(order);
+            order.currentStep = "已识别 " + detectedPages + " 页并更新订单金额，等待文件检查";
+            file.analysisMessage += " 订单页数已由 " + oldPageCount + " 更新为 " + detectedPages + "，金额已重新计算。";
+            audit.record(username, "ORD", "AUTO_UPDATE_ORDER_FROM_FILE", "ORDER", order.id,
+                    "pageCount " + oldPageCount + " -> " + detectedPages + ", fileVersion=" + file.versionNo);
+            return;
+        }
+        if ("DETECTED".equals(file.analysisStatus) && validPageCount) {
+            order.currentStep = "文件已上传并识别 " + detectedPages + " 页，订单已进入审核，未自动修改";
+            file.analysisMessage += " 订单已进入审核，未自动修改订单参数。";
+            return;
+        }
+        if ("DETECTED".equals(file.analysisStatus)) {
+            order.currentStep = "文件已上传，识别页数超出订单范围，请人工检查";
+            return;
+        }
+        if ("UNSUPPORTED".equals(file.analysisStatus)) {
+            order.currentStep = "文件已上传，暂不支持自动识别，请人工检查";
+            return;
+        }
+        order.currentStep = "文件已上传，自动识别失败，请人工检查";
+    }
+
+    private void requireFileBeforeReview(PrintOrder order, String requestedStatus) {
+        if (OrderStatusPolicy.REVIEWING.equals(requestedStatus)
+                && !OrderStatusPolicy.REVIEWING.equals(order.status)
+                && !files.existsByOrderId(order.id)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "请先上传订单文件，再提交审核。");
+        }
     }
 
     private StoredFile storedFile(OrderFile file, boolean inline) {

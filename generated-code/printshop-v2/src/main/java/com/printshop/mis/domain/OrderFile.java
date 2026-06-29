@@ -1,10 +1,12 @@
 package com.printshop.mis.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,5 +27,18 @@ public class OrderFile {
     public String uploadedRole;
     public String remark;
     public String reviewStatus;
+    public String analysisStatus;
+    public Integer detectedPageCount;
+    public BigDecimal detectedWidthMm;
+    public BigDecimal detectedHeightMm;
+    public Integer detectedPixelWidth;
+    public Integer detectedPixelHeight;
+    @Column(name = "detected_dpi_x")
+    public BigDecimal detectedDpiX;
+    @Column(name = "detected_dpi_y")
+    public BigDecimal detectedDpiY;
+    public boolean mixedPageSizes;
+    public String analysisMessage;
+    public LocalDateTime analyzedAt;
     public LocalDateTime uploadedAt;
 }

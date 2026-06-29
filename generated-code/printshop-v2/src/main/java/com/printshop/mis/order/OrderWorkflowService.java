@@ -113,6 +113,9 @@ public class OrderWorkflowService {
     public List<Map<String, Object>> nextActions(String username, Long orderId) {
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
         List<Map<String, Object>> actions = new ArrayList<>();
+        if (workflowPolicy.needsFileUpload(username, order)) {
+            addAction(actions, "UPLOAD_FILE", "上传订单文件", "上传非空文件后才能提交审核");
+        }
         if (workflowPolicy.available(username, order, "SUBMIT_REVIEW")) {
             addAction(actions, "SUBMIT_REVIEW", "提交审核", "订单进入门店文件审核");
         }

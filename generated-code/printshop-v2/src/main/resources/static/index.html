@@ -14,16 +14,21 @@
           <p>订单、报价、作业单、生产、库存、配送、财务与审计一体化</p>
           <label>
             账号
-            <input id="username" value="admin" autocomplete="username" />
+            <input id="username" value="admin" autocomplete="username" required />
           </label>
           <label>
             密码
-            <input id="password" value="demo123" type="password" autocomplete="current-password" />
+            <input id="password" value="demo123" type="password" autocomplete="current-password" required />
+          </label>
+          <label class="register-only hidden">
+            账号类型
+            <input value="客户用户" disabled />
           </label>
           <label class="register-only hidden">
             显示名称
-            <input id="displayName" autocomplete="name" />
+            <input id="displayName" autocomplete="name" maxlength="100" />
           </label>
+          <p id="authMessage" class="auth-message hidden" role="alert"></p>
           <button type="submit">登录系统</button>
           <button id="registerModeBtn" type="button" class="secondary">注册客户账号</button>
           <small>演示账号：customer / clerk / manager / ops / finance / courier / admin，密码均为 demo123</small>

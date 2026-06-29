@@ -55,17 +55,29 @@ async function login(event) {
     toggleAuth();
     await loadModule("dashboard");
   } catch (error) {
-    showError(error);
+    showAuthError(error.message);
   }
 }
 
 function toggleRegisterMode(force = null) {
   registerMode = force === null ? !registerMode : force;
+  clearAuthError();
   document.querySelectorAll(".register-only").forEach((node) => node.classList.toggle("hidden", !registerMode));
   el.loginForm.querySelector("button[type='submit']").textContent = registerMode ? "注册并进入" : "登录系统";
   el.registerModeBtn.textContent = registerMode ? "返回登录" : "注册客户账号";
   el.username.autocomplete = registerMode ? "username" : "username";
   el.password.autocomplete = registerMode ? "new-password" : "current-password";
+  el.displayName.required = registerMode;
+}
+
+function showAuthError(message) {
+  el.authMessage.textContent = message || "登录失败，请检查账号和密码。";
+  el.authMessage.classList.remove("hidden");
+}
+
+function clearAuthError() {
+  el.authMessage.textContent = "";
+  el.authMessage.classList.add("hidden");
 }
 
 function logout() {
@@ -89,6 +101,7 @@ async function loadModule(name = state.module) {
   el.pageTitle.textContent = config.title;
   el.pageSubTitle.textContent = name === "dashboard" ? "端到端业务状态" : `${config.title} 管理`;
   el.tableTitle.textContent = config.title;
+  el.newBtn.hidden = name === "dashboard";
   el.newBtn.disabled = Boolean(config.readonly);
   if (name === "dashboard") {
     await renderDashboard();
@@ -145,11 +158,16 @@ async function saveRecord() {
 }
 
 async function deleteRecord() {
-  if (!state.selected?.id || !confirm(`确认删除 #${state.selected.id}？`)) return;
+  if (!state.selected?.id) return;
+  const isUser = state.module === "users";
+  const prompt = isUser
+    ? `确认停用账号 ${state.selected.username}？历史订单和审计记录将保留。`
+    : `确认删除 #${state.selected.id}？`;
+  if (!confirm(prompt)) return;
   const config = modules[state.module];
   const data = await api(`${config.endpoint}/${state.selected.id}`, { method: "DELETE" });
   await loadModule(state.module);
-  show(data, "删除完成");
+  show(data, isUser ? "账号已停用，历史数据已保留" : "删除完成");
 }
 
 async function clearBusinessData() {
@@ -251,8 +269,15 @@ async function uploadOrderFile() {
     form.append("file", input.files[0]);
     try {
       const data = await api(`/api/orders/${state.selected.id}/files`, { method: "POST", body: form });
-      await loadModule("orders");
-      show(data, "文件已上传");
+      if (state.module === "dashboard") {
+        const orderId = state.selected.id;
+        await refreshWorkbenchOnly();
+        const nextTask = state.records.find((task) => String(task.orderId) === String(orderId)) || state.selectedTask;
+        await loadOrderAggregate(orderId, nextTask, true);
+      } else {
+        await loadModule("orders");
+      }
+      show(data, data.analysisMessage || "文件已上传");
     } catch (error) {
       showError(error);
     }
@@ -304,6 +329,7 @@ function fileNameFromDisposition(disposition) {
 
 el.loginForm.addEventListener("submit", login);
 el.registerModeBtn.addEventListener("click", () => toggleRegisterMode());
+el.loginForm.addEventListener("input", clearAuthError);
 el.logoutBtn.addEventListener("click", logout);
 el.clearDataBtn.addEventListener("click", () => clearBusinessData().catch(showError));
 el.refreshBtn.addEventListener("click", () => loadModule().catch(showError));

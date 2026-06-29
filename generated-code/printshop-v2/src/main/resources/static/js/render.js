@@ -125,7 +125,7 @@ export function renderForm(handlers) {
         renderForm(handlers);
       });
     }
-    if (state.selected?.id && !state.editing) {
+    if (state.selected?.id && !state.editing && (state.module !== "users" || state.selected.active)) {
       addAction("删除", handlers.deleteRecord, "danger");
     }
   }
@@ -163,7 +163,10 @@ export function renderAggregateDetail(handlers) {
   `;
   el.recordActions.innerHTML = "";
   for (const action of aggregate.nextTasks || []) {
-    addAction(action.label || action.action, () => handlers.runWorkflowAction(action.action, order.id), "primary");
+    const handler = action.action === "UPLOAD_FILE"
+      ? handlers.uploadOrderFile
+      : () => handlers.runWorkflowAction(action.action, order.id);
+    addAction(action.label || action.action, handler, "primary");
   }
   if (state.selectedTask?.type === "CHANGE_REQUEST") {
     addAction("审批通过", () => handlers.runChangeTask("approve", state.selectedTask.changeRequestId), "primary");
@@ -382,37 +385,65 @@ function fileListSection(files = []) {
   if (!files.length) {
     return `<section class="aggregate-section wide"><h3>文件</h3><p class="empty">暂无文件记录</p></section>`;
   }
-  const columns = ["versionNo", "fileName", "contentType", "sizeBytes", "uploadedBy", "reviewStatus", "uploadedAt", "fileActions"];
   return `
     <section class="aggregate-section wide">
       <h3>文件</h3>
-      <table>
-        <thead><tr>${columns.map((column) => `<th>${escapeHtml(labelForColumn(column))}</th>`).join("")}</tr></thead>
-        <tbody>
-          ${files.slice(0, 8).map((file) => `
-            <tr>
-              ${columns.map((column) => `<td>${fileCell(file, column)}</td>`).join("")}
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+      <div class="file-record-list">
+        ${files.slice(0, 8).map(fileRecord).join("")}
+      </div>
     </section>
   `;
 }
 
-function fileCell(file, column) {
-  if (column === "fileActions") {
-    return `
-      <span class="file-actions">
+function fileRecord(file) {
+  return `
+    <article class="file-record">
+      <header class="file-record-head">
+        <span class="file-version">V${escapeHtml(format(file.versionNo))}</span>
+        <strong title="${escapeAttribute(file.fileName)}">${formatCell(file.fileName)}</strong>
+        ${formatCell(file.reviewStatus, "reviewStatus")}
+      </header>
+      <div class="file-meta">
+        <div><span>文件类型</span><strong>${formatCell(file.contentType)}</strong></div>
+        <div><span>大小</span><strong>${formatBytes(file.sizeBytes)}</strong></div>
+        <div><span>上传人</span><strong>${formatCell(file.uploadedBy)}</strong></div>
+        <div><span>上传时间</span><strong>${formatDateTime(file.uploadedAt)}</strong></div>
+      </div>
+      ${fileAnalysis(file)}
+      <footer class="file-actions">
         <button type="button" data-file-preview="${escapeAttribute(file.id)}">预览</button>
         <button type="button" data-file-download="${escapeAttribute(file.id)}">下载</button>
-      </span>
-    `;
-  }
-  if (column === "sizeBytes") {
-    return formatBytes(file.sizeBytes);
-  }
-  return formatCell(file[column], column);
+      </footer>
+    </article>
+  `;
+}
+
+function fileAnalysis(file) {
+  const pageSize = file.detectedWidthMm && file.detectedHeightMm
+    ? `${format(file.detectedWidthMm)} x ${format(file.detectedHeightMm)} mm`
+    : "-";
+  const pixels = file.detectedPixelWidth && file.detectedPixelHeight
+    ? `${format(file.detectedPixelWidth)} x ${format(file.detectedPixelHeight)} px`
+    : "-";
+  const dpi = file.detectedDpiX && file.detectedDpiY
+    ? `${format(file.detectedDpiX)} x ${format(file.detectedDpiY)} DPI`
+    : "-";
+  return `
+    <section class="file-analysis">
+      <header>
+        <span>自动识别</span>
+        ${formatCell(file.analysisStatus || "PENDING", "analysisStatus")}
+      </header>
+      <div class="file-analysis-grid">
+        <div><span>页数</span><strong>${formatCell(file.detectedPageCount)}</strong></div>
+        <div><span>页面尺寸</span><strong>${escapeHtml(pageSize)}</strong></div>
+        <div><span>像素尺寸</span><strong>${escapeHtml(pixels)}</strong></div>
+        <div><span>DPI</span><strong>${escapeHtml(dpi)}</strong></div>
+      </div>
+      ${file.mixedPageSizes ? "<p class=\"analysis-warning\">检测到混合页面尺寸，请人工确认生产规格。</p>" : ""}
+      <p>${formatCell(file.analysisMessage || "等待文件分析")}</p>
+    </section>
+  `;
 }
 
 function formatBytes(value) {
@@ -420,6 +451,11 @@ function formatBytes(value) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return escapeHtml(String(value).replace("T", " ").slice(0, 19));
 }
 
 function progressSection(aggregate) {

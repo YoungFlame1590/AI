@@ -1,0 +1,11 @@
+ALTER TABLE order_files ADD COLUMN analysis_status VARCHAR(32) NOT NULL DEFAULT 'PENDING';
+ALTER TABLE order_files ADD COLUMN detected_page_count INT;
+ALTER TABLE order_files ADD COLUMN detected_width_mm DECIMAL(10, 2);
+ALTER TABLE order_files ADD COLUMN detected_height_mm DECIMAL(10, 2);
+ALTER TABLE order_files ADD COLUMN detected_pixel_width INT;
+ALTER TABLE order_files ADD COLUMN detected_pixel_height INT;
+ALTER TABLE order_files ADD COLUMN detected_dpi_x DECIMAL(10, 2);
+ALTER TABLE order_files ADD COLUMN detected_dpi_y DECIMAL(10, 2);
+ALTER TABLE order_files ADD COLUMN mixed_page_sizes BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE order_files ADD COLUMN analysis_message VARCHAR(500);
+ALTER TABLE order_files ADD COLUMN analyzed_at TIMESTAMP;
