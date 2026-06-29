@@ -465,6 +465,31 @@ tr.selected {
   grid-column: 1 / -1;
 }
 
+.initial-order-upload {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px dashed #9cb4c8;
+  background: #f7fafc;
+}
+
+.initial-order-upload label {
+  color: #243746;
+  font-weight: 700;
+}
+
+.initial-order-upload input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #c5d2dc;
+  background: #fff;
+}
+
+.initial-order-upload p {
+  margin: 0;
+  color: #607485;
+}
+
 .aggregate-summary,
 .aggregate-section {
   grid-column: 1 / -1;

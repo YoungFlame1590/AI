@@ -68,7 +68,7 @@ public class IdentityService {
         if (users.existsByUsername(request.username())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "用户名已存在。");
         }
-        String displayName = requireUniqueDisplayName(request.displayName(), null);
+        String displayName = validateDisplayName(request.displayName());
         UserAccount account = new UserAccount();
         account.username = request.username().trim();
         account.password = passwordEncoder.encode(request.password());
@@ -89,7 +89,7 @@ public class IdentityService {
         if (users.existsByUsername(request.username())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "用户名已存在。");
         }
-        String displayName = requireUniqueDisplayName(request.displayName(), null);
+        String displayName = validateDisplayName(request.displayName());
         UserAccount account = new UserAccount();
         account.username = request.username().trim();
         account.password = passwordEncoder.encode(request.password());
@@ -120,7 +120,7 @@ public class IdentityService {
             account.role = nextRole;
         }
         if (request.displayName() != null) {
-            account.displayName = requireUniqueDisplayName(request.displayName(), account.id);
+            account.displayName = validateDisplayName(request.displayName());
         }
         if (request.storeId() != null || Set.of("CUSTOMER", "CLERK", "MANAGER").contains(account.role)) {
             account.storeId = requireStoreForRole(account.role, request.storeId() == null ? account.storeId : request.storeId());
@@ -202,6 +202,24 @@ public class IdentityService {
         return stores.findById(storeId).map(store -> store.name).orElse("未知门店");
     }
 
+    public String resolveActiveCourierUsername(String accountOrDisplayName) {
+        if (accountOrDisplayName == null || accountOrDisplayName.isBlank() || "待分配".equals(accountOrDisplayName)) {
+            return null;
+        }
+        String normalized = accountOrDisplayName.trim();
+        UserAccount byUsername = users.findByUsername(normalized).orElse(null);
+        if (byUsername != null && byUsername.active && "COURIER".equals(byUsername.role)) {
+            return byUsername.username;
+        }
+        List<UserAccount> matches = users.findAllByDisplayNameIgnoreCase(normalized).stream()
+                .filter(account -> account.active && "COURIER".equals(account.role))
+                .toList();
+        if (matches.size() > 1) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "配送员显示名称重复，请使用登录账号分配配送任务。");
+        }
+        return matches.isEmpty() ? null : matches.get(0).username;
+    }
+
     private UserAccount requireAdmin(String username) {
         UserAccount current = requireUser(username);
         if (!"ADMIN".equals(current.role)) {
@@ -257,7 +275,7 @@ public class IdentityService {
         }
     }
 
-    private String requireUniqueDisplayName(String displayName, Long currentId) {
+    private String validateDisplayName(String displayName) {
         if (displayName == null || displayName.isBlank()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "显示名称不能为空。");
         }
@@ -265,11 +283,6 @@ public class IdentityService {
         if (normalized.length() > 100) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "显示名称不能超过 100 个字符。");
         }
-        users.findByDisplayNameIgnoreCase(normalized).ifPresent(existing -> {
-            if (!existing.id.equals(currentId)) {
-                throw new BusinessException(HttpStatus.BAD_REQUEST, "显示名称已存在，请更换后重试。");
-            }
-        });
         return normalized;
     }
 

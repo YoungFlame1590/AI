@@ -88,8 +88,9 @@ public class OrderAccessPolicy {
 
     private boolean carrierMatches(UserAccount user, DeliveryTask task) {
         String carrier = text(task.carrierName, "");
-        return carrier.equals(user.displayName)
-                || carrier.equals(user.username)
+        String carrierUsername = text(task.carrierUsername, "");
+        return carrierUsername.equals(user.username)
+                || (carrierUsername.isBlank() && carrier.equals(user.username))
                 || carrier.isBlank()
                 || "待分配".equals(carrier)
                 || "PENDING".equals(task.status);

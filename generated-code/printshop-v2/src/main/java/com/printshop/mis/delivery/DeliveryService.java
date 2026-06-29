@@ -51,6 +51,9 @@ public class DeliveryService {
         task.orderId = request.orderId;
         task.mode = text(request.mode, "到店自提");
         task.carrierName = text(request.carrierName, "待分配");
+        task.carrierUsername = identityService.resolveActiveCourierUsername(
+                text(request.carrierUsername, task.carrierName)
+        );
         task.targetStore = text(request.targetStore, "客户地址");
         task.status = "ASSIGNED";
         task.signedBy = request.signedBy;
@@ -86,7 +89,13 @@ public class DeliveryService {
     public DeliveryTask updateDeliveryTask(String username, Long id, DeliveryTask request) {
         DeliveryTask task = getDeliveryTask(username, id);
         task.mode = text(request.mode, task.mode);
-        task.carrierName = text(request.carrierName, task.carrierName);
+        if (request.carrierName != null && !request.carrierName.equals(task.carrierName)) {
+            task.carrierName = text(request.carrierName, task.carrierName);
+            task.carrierUsername = identityService.resolveActiveCourierUsername(task.carrierName);
+        }
+        if (request.carrierUsername != null) {
+            task.carrierUsername = identityService.resolveActiveCourierUsername(request.carrierUsername);
+        }
         task.targetStore = text(request.targetStore, task.targetStore);
         task.status = text(request.status, task.status);
         task.signedBy = text(request.signedBy, task.signedBy);
@@ -122,6 +131,7 @@ public class DeliveryService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "该订单没有待接配送任务。"));
         task.carrierName = user.displayName;
+        task.carrierUsername = user.username;
         task.status = "ACCEPTED";
         task.updatedAt = now();
         order.status = "DELIVERING";
@@ -146,8 +156,9 @@ public class DeliveryService {
 
     private boolean carrierMatches(UserAccount user, DeliveryTask task) {
         String carrier = text(task.carrierName, "");
-        return carrier.equals(user.displayName)
-                || carrier.equals(user.username)
+        String carrierUsername = text(task.carrierUsername, "");
+        return carrierUsername.equals(user.username)
+                || (carrierUsername.isBlank() && carrier.equals(user.username))
                 || carrier.isBlank()
                 || "待分配".equals(carrier)
                 || "PENDING".equals(task.status);

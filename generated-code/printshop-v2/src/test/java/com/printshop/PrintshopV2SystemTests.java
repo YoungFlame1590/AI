@@ -18,6 +18,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.imageio.IIOImage;
@@ -31,6 +32,9 @@ import javax.imageio.stream.ImageOutputStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -117,8 +121,8 @@ class PrintshopV2SystemTests {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"%s_2\",\"password\":\"demo123\",\"displayName\":\"新客户\"}".formatted(customerName)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(containsString("显示名称已存在")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.displayName").value("新客户"));
 
         String storeCode = "STORE-T-" + Long.toString(System.nanoTime(), 36).toUpperCase();
         MvcResult store = mockMvc.perform(post("/api/admin/stores")
@@ -157,6 +161,13 @@ class PrintshopV2SystemTests {
                 .andExpect(jsonPath("$.data.role").value("CLERK"))
                 .andReturn();
         Integer clerkId = JsonPath.read(clerk.getResponse().getContentAsString(), "$.data.id");
+
+        mockMvc.perform(put("/api/admin/users/{id}", clerkId)
+                        .with(httpBasic("admin", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"新客户\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.displayName").value("新客户"));
 
         mockMvc.perform(post("/api/admin/users/{id}/reset-password", clerkId)
                         .with(httpBasic("admin", "demo123"))
@@ -394,7 +405,7 @@ class PrintshopV2SystemTests {
                         .with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.versionNo").value(2))
-                .andExpect(jsonPath("$.data.analysisStatus").value("UNSUPPORTED"))
+                .andExpect(jsonPath("$.data.analysisStatus").value("FAILED"))
                 .andReturn();
         Integer docxFileId = JsonPath.read(docxUpload.getResponse().getContentAsString(), "$.data.id");
         mockMvc.perform(get("/api/order-files/{fileId}/preview", docxFileId)
@@ -465,8 +476,8 @@ class PrintshopV2SystemTests {
 
         MockMultipartFile unsupported = new MockMultipartFile(
                 "file",
-                "source.docx",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "source.psd",
+                "image/vnd.adobe.photoshop",
                 "office".getBytes(java.nio.charset.StandardCharsets.UTF_8)
         );
         mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
@@ -511,6 +522,75 @@ class PrintshopV2SystemTests {
         mockMvc.perform(get("/api/orders/{id}", orderId).with(httpBasic("customer", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.pageCount").value(1));
+    }
+
+    @Test
+    void shouldCreateOrderFromWordFileAndHandlePartialOrBrokenWord() throws Exception {
+        MockMultipartFile empty = new MockMultipartFile(
+                "file",
+                "empty.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                new byte[0]
+        );
+        mockMvc.perform(multipart("/api/orders/from-file")
+                        .file(empty)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("不能为空")));
+
+        MockMultipartFile docx = new MockMultipartFile(
+                "file",
+                "manual.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                docxBytes(12, true)
+        );
+        MvcResult created = mockMvc.perform(multipart("/api/orders/from-file")
+                        .file(docx)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.order.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.data.order.pageCount").value(12))
+                .andExpect(jsonPath("$.data.file.versionNo").value(1))
+                .andExpect(jsonPath("$.data.file.analysisStatus").value("DETECTED"))
+                .andExpect(jsonPath("$.data.file.detectedPageCount").value(12))
+                .andExpect(jsonPath("$.data.file.detectedWidthMm").value(210.01))
+                .andExpect(jsonPath("$.data.file.detectedHeightMm").value(297.0))
+                .andExpect(jsonPath("$.data.file.mixedPageSizes").value(true))
+                .andExpect(jsonPath("$.data.file.analysisMessage").value(containsString("文档保存属性")))
+                .andReturn();
+        Integer orderId = JsonPath.read(created.getResponse().getContentAsString(), "$.data.order.id");
+
+        MockMultipartFile partialDocx = new MockMultipartFile(
+                "file",
+                "no-page-count.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                docxBytes(null, false)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(partialDocx)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("PARTIAL"))
+                .andExpect(jsonPath("$.data.detectedPageCount").doesNotExist())
+                .andExpect(jsonPath("$.data.detectedWidthMm").value(210.01));
+
+        MockMultipartFile brokenDoc = new MockMultipartFile(
+                "file",
+                "legacy.doc",
+                "application/msword",
+                "not-a-word-document".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        mockMvc.perform(multipart("/api/orders/{id}/files", orderId)
+                        .file(brokenDoc)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.analysisStatus").value("FAILED"))
+                .andExpect(jsonPath("$.data.analysisMessage").value(containsString("文件分析失败")));
+
+        mockMvc.perform(get("/api/orders/{id}/files", orderId)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(3));
     }
 
     @Test
@@ -961,6 +1041,32 @@ class PrintshopV2SystemTests {
             document.save(output);
             return output.toByteArray();
         }
+    }
+
+    private byte[] docxBytes(Integer pageCount, boolean mixedPageSizes) throws Exception {
+        try (XWPFDocument document = new XWPFDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            document.createParagraph().createRun().setText("Print MIS Word analysis fixture");
+            if (pageCount != null) {
+                document.getProperties().getExtendedProperties().setPages(pageCount);
+            }
+            if (mixedPageSizes) {
+                CTSectPr firstSection = document.createParagraph()
+                        .getCTP()
+                        .addNewPPr()
+                        .addNewSectPr();
+                setWordPageSize(firstSection, 11906, 16838);
+            }
+            CTSectPr finalSection = document.getDocument().getBody().addNewSectPr();
+            setWordPageSize(finalSection, mixedPageSizes ? 8391 : 11906, mixedPageSizes ? 11906 : 16838);
+            document.write(output);
+            return output.toByteArray();
+        }
+    }
+
+    private void setWordPageSize(CTSectPr section, long widthTwips, long heightTwips) {
+        CTPageSz pageSize = section.addNewPgSz();
+        pageSize.setW(BigInteger.valueOf(widthTwips));
+        pageSize.setH(BigInteger.valueOf(heightTwips));
     }
 
     private byte[] pngBytes(int width, int height, int dpi) throws Exception {

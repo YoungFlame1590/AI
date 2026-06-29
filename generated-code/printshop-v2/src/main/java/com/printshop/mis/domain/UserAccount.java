@@ -19,7 +19,7 @@ public class UserAccount {
     @JsonIgnore
     public String password;
     public String role;
-    @Column(name = "display_name", unique = true, nullable = false)
+    @Column(name = "display_name", nullable = false)
     public String displayName;
     public Long storeId;
     public boolean active = true;

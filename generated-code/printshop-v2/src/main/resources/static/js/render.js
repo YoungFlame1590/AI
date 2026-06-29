@@ -74,6 +74,10 @@ export function renderTable(customColumns, customTitle) {
 
 export function renderForm(handlers) {
   document.querySelector(".workspace")?.classList.toggle("reports-workspace", state.module === "reports");
+  if (state.module === "orders" && state.creatingOrderFromFile) {
+    renderInitialOrderUpload(handlers);
+    return;
+  }
   if (state.module === "dashboard" && state.aggregate) {
     renderAggregateDetail(handlers);
     return;
@@ -142,6 +146,31 @@ export function renderForm(handlers) {
     addAction("上传文件", handlers.uploadOrderFile);
     addAction("查看文件", handlers.loadOrderFiles);
   }
+}
+
+function renderInitialOrderUpload(handlers) {
+  el.detailTitle.textContent = "新增订单";
+  el.recordForm.innerHTML = `
+    <section class="initial-order-upload wide">
+      <label for="initialOrderFile">订单文件</label>
+      <input
+        id="initialOrderFile"
+        name="initialOrderFile"
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.psd,.ai"
+        required
+      >
+      <p>支持 PDF、图片、Word、PSD 和 AI，单个文件不超过 50MB。</p>
+    </section>
+  `;
+  el.recordActions.innerHTML = "";
+  addAction("上传并生成订单", handlers.createOrderFromFile, "primary");
+  addAction("取消", () => {
+    state.creatingOrderFromFile = false;
+    state.selected = state.records[0] || null;
+    renderTable();
+    renderForm(handlers);
+  });
 }
 
 export function renderAggregateDetail(handlers) {

@@ -108,6 +108,13 @@ public class OrderService {
         return saved;
     }
 
+    public CreatedOrderFromFile createOrderFromFile(String username, MultipartFile upload) {
+        validateUpload(upload);
+        PrintOrder order = createOrder(username, new PrintOrder());
+        OrderFile file = uploadFile(username, order.id, upload);
+        return new CreatedOrderFromFile(order, file);
+    }
+
     @Transactional(readOnly = true)
     public List<PrintOrder> listOrders(String username) {
         return visibleOrders(identityService.requireUser(username));
@@ -172,12 +179,13 @@ public class OrderService {
         UserAccount user = identityService.requireUser(username);
         PrintOrder order = access.requireVisibleOrder(user, orderId);
         validateUpload(upload);
+        Path target = null;
         try {
             Files.createDirectories(uploadRoot);
             String originalName = safeOriginalName(upload.getOriginalFilename());
             String extension = extensionOf(originalName);
             String storageName = UUID.randomUUID() + "." + extension;
-            Path target = uploadRoot.resolve(storageName).normalize();
+            target = uploadRoot.resolve(storageName).normalize();
             if (!target.startsWith(uploadRoot)) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "文件名不合法。");
             }
@@ -206,7 +214,11 @@ public class OrderService {
                     file.analysisStatus + " - " + file.analysisMessage);
             return saved;
         } catch (IOException ex) {
+            deleteStoredFile(target);
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "文件保存失败：" + ex.getMessage());
+        } catch (RuntimeException | Error ex) {
+            deleteStoredFile(target);
+            throw ex;
         }
     }
 
@@ -383,7 +395,22 @@ public class OrderService {
             order.currentStep = "文件已上传，暂不支持自动识别，请人工检查";
             return;
         }
+        if ("PARTIAL".equals(file.analysisStatus)) {
+            order.currentStep = "文件已上传，已读取部分参数，请人工确认页数";
+            return;
+        }
         order.currentStep = "文件已上传，自动识别失败，请人工检查";
+    }
+
+    private void deleteStoredFile(Path target) {
+        if (target == null || !target.startsWith(uploadRoot)) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException ignored) {
+            // Preserve the original upload or persistence error.
+        }
     }
 
     private void requireFileBeforeReview(PrintOrder order, String requestedStatus) {
@@ -447,6 +474,9 @@ public class OrderService {
             case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
             default -> "application/octet-stream";
         };
+    }
+
+    public record CreatedOrderFromFile(PrintOrder order, OrderFile file) {
     }
 
     public record StoredFile(OrderFile file, Resource resource, String contentType, boolean inline) {

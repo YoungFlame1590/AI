@@ -17,6 +17,7 @@ public class DeliveryTask {
     public Long orderId;
     public String mode;
     public String carrierName;
+    public String carrierUsername;
     public String targetStore;
     public String status;
     public String signedBy;

@@ -43,6 +43,11 @@ public class OrderController {
         return api.ok(orderService.createOrder(principal.getName(), request));
     }
 
+    @PostMapping(path = "/api/orders/from-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<?> createOrderFromFile(Principal principal, @RequestPart("file") MultipartFile file) {
+        return api.ok(orderService.createOrderFromFile(principal.getName(), file));
+    }
+
     @GetMapping("/api/orders/{id}")
     public ApiResponse<?> getOrder(Principal principal, @PathVariable Long id) {
         return api.ok(orderService.getOrder(principal.getName(), id));

@@ -8,6 +8,7 @@ export const state = {
   workbench: null,
   aggregate: null,
   editing: false,
+  creatingOrderFromFile: false,
 };
 
 export const el = {

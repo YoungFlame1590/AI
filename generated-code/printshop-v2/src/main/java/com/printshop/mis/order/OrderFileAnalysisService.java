@@ -1,10 +1,14 @@
 package com.printshop.mis.order;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -14,6 +18,16 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.poi.hpsf.SummaryInformation;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.usermodel.Range;
+import org.apache.poi.hwpf.usermodel.Section;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.openxmlformats.schemas.officeDocument.x2006.extendedProperties.CTProperties;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBody;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -23,7 +37,9 @@ public class OrderFileAnalysisService {
 
     private static final BigDecimal MILLIMETERS_PER_INCH = new BigDecimal("25.4");
     private static final BigDecimal POINTS_PER_INCH = new BigDecimal("72");
+    private static final BigDecimal TWIPS_PER_INCH = new BigDecimal("1440");
     private static final float PAGE_SIZE_TOLERANCE_POINTS = 0.5f;
+    private static final BigDecimal PAGE_SIZE_TOLERANCE_MM = new BigDecimal("0.20");
     private static final int MAX_PAGE_SIZE_CHECKS = 5000;
 
     public AnalysisResult analyze(Path path, String extension) {
@@ -31,6 +47,8 @@ public class OrderFileAnalysisService {
             return switch (extension.toLowerCase(Locale.ROOT)) {
                 case "pdf" -> analyzePdf(path);
                 case "jpg", "jpeg", "png" -> analyzeImage(path);
+                case "docx" -> analyzeDocx(path);
+                case "doc" -> analyzeDoc(path);
                 default -> AnalysisResult.unsupported("该文件类型暂不支持自动识别，请人工填写订单参数。");
             };
         } catch (Exception | LinkageError error) {
@@ -125,6 +143,104 @@ public class OrderFileAnalysisService {
         }
     }
 
+    private AnalysisResult analyzeDocx(Path path) throws IOException {
+        try (InputStream input = Files.newInputStream(path); XWPFDocument document = new XWPFDocument(input)) {
+            CTProperties properties = document.getProperties()
+                    .getExtendedProperties()
+                    .getUnderlyingProperties();
+            Integer pageCount = properties.isSetPages() && properties.getPages() > 0
+                    ? properties.getPages()
+                    : null;
+            List<WordPageSize> sizes = new ArrayList<>();
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                if (paragraph.getCTP().isSetPPr() && paragraph.getCTP().getPPr().isSetSectPr()) {
+                    addDocxPageSize(sizes, paragraph.getCTP().getPPr().getSectPr());
+                }
+            }
+            CTBody body = document.getDocument().getBody();
+            if (body.isSetSectPr()) {
+                addDocxPageSize(sizes, body.getSectPr());
+            }
+            return wordResult("DOCX", pageCount, sizes);
+        }
+    }
+
+    private AnalysisResult analyzeDoc(Path path) throws IOException {
+        try (InputStream input = Files.newInputStream(path); HWPFDocument document = new HWPFDocument(input)) {
+            SummaryInformation summary = document.getSummaryInformation();
+            Integer pageCount = summary != null && summary.getPageCount() > 0
+                    ? summary.getPageCount()
+                    : null;
+            List<WordPageSize> sizes = new ArrayList<>();
+            Range range = document.getRange();
+            for (int index = 0; index < range.numSections(); index++) {
+                Section section = range.getSection(index);
+                if (section.getPageWidth() > 0 && section.getPageHeight() > 0) {
+                    sizes.add(new WordPageSize(
+                            twipsToMillimeters(section.getPageWidth()),
+                            twipsToMillimeters(section.getPageHeight())
+                    ));
+                }
+            }
+            return wordResult("DOC", pageCount, sizes);
+        }
+    }
+
+    private void addDocxPageSize(List<WordPageSize> sizes, CTSectPr section) {
+        if (section == null || !section.isSetPgSz()) {
+            return;
+        }
+        CTPageSz pageSize = section.getPgSz();
+        if (!pageSize.isSetW() || !pageSize.isSetH()) {
+            return;
+        }
+        try {
+            BigDecimal widthTwips = new BigDecimal(pageSize.getW().toString());
+            BigDecimal heightTwips = new BigDecimal(pageSize.getH().toString());
+            if (widthTwips.signum() > 0 && heightTwips.signum() > 0) {
+                sizes.add(new WordPageSize(
+                        twipsToMillimeters(widthTwips),
+                        twipsToMillimeters(heightTwips)
+                ));
+            }
+        } catch (NumberFormatException ignored) {
+            // A readable Word file may omit usable numeric section dimensions.
+        }
+    }
+
+    private AnalysisResult wordResult(String format, Integer pageCount, List<WordPageSize> sizes) {
+        WordPageSize first = sizes.isEmpty() ? null : sizes.get(0);
+        boolean mixed = first != null && sizes.stream().skip(1).anyMatch(size ->
+                first.widthMm.subtract(size.widthMm).abs().compareTo(PAGE_SIZE_TOLERANCE_MM) > 0
+                        || first.heightMm.subtract(size.heightMm).abs().compareTo(PAGE_SIZE_TOLERANCE_MM) > 0);
+        String message = "已解析 " + format;
+        if (pageCount == null) {
+            message += "，文档属性未提供页数，请人工确认";
+        } else {
+            message += "：文档属性记录 " + pageCount + " 页";
+        }
+        if (first != null) {
+            message += "，页面尺寸 " + first.widthMm.toPlainString() + " x "
+                    + first.heightMm.toPlainString() + " mm";
+        }
+        if (mixed) {
+            message += "，包含不同页面尺寸";
+        }
+        message += "。Word 页数来自文档保存属性，可能与重新排版结果不同，请人工确认。";
+        return new AnalysisResult(
+                pageCount == null ? "PARTIAL" : "DETECTED",
+                pageCount,
+                first == null ? null : first.widthMm,
+                first == null ? null : first.heightMm,
+                null,
+                null,
+                null,
+                null,
+                mixed,
+                message
+        );
+    }
+
     private PageSize pageSize(PDPage page) {
         PDRectangle box = page.getCropBox();
         float width = box.getWidth();
@@ -191,6 +307,15 @@ public class OrderFileAnalysisService {
                 .divide(POINTS_PER_INCH, 2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal twipsToMillimeters(int twips) {
+        return twipsToMillimeters(BigDecimal.valueOf(twips));
+    }
+
+    private BigDecimal twipsToMillimeters(BigDecimal twips) {
+        return twips.multiply(MILLIMETERS_PER_INCH)
+                .divide(TWIPS_PER_INCH, 2, RoundingMode.HALF_UP);
+    }
+
     private String safeMessage(Throwable error) {
         String message = error.getMessage();
         if (message == null || message.isBlank()) {
@@ -201,6 +326,9 @@ public class OrderFileAnalysisService {
     }
 
     private record PageSize(float widthPoints, float heightPoints) {
+    }
+
+    private record WordPageSize(BigDecimal widthMm, BigDecimal heightMm) {
     }
 
     public record AnalysisResult(

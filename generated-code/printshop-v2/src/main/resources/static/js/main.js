@@ -17,6 +17,7 @@ const handlers = {
   runRecordAction,
   runWorkflowAction,
   runChangeTask,
+  createOrderFromFile,
   uploadOrderFile,
   loadOrderFiles,
 };
@@ -94,6 +95,7 @@ async function loadModule(name = state.module) {
   }
   state.module = name;
   state.editing = false;
+  state.creatingOrderFromFile = false;
   document.querySelectorAll(".nav button").forEach((button) => {
     button.classList.toggle("active", button.dataset.module === name);
   });
@@ -153,6 +155,7 @@ async function saveRecord() {
   const path = state.selected?.id ? `${config.endpoint}/${state.selected.id}` : config.endpoint;
   const data = await api(path, { method, body: JSON.stringify(readForm()) });
   state.editing = false;
+  state.creatingOrderFromFile = false;
   await loadModule(state.module);
   show(data, method === "POST" ? "新增完成" : "保存完成");
 }
@@ -285,6 +288,24 @@ async function uploadOrderFile() {
   input.click();
 }
 
+async function createOrderFromFile() {
+  const input = el.recordForm.querySelector("[name='initialOrderFile']");
+  if (!input?.files?.length) {
+    throw new Error("请先选择订单文件。");
+  }
+  const form = new FormData();
+  form.append("file", input.files[0]);
+  const data = await api("/api/orders/from-file", { method: "POST", body: form });
+  const orderId = data.order?.id;
+  state.creatingOrderFromFile = false;
+  await loadModule("orders");
+  state.selected = state.records.find((record) => String(record.id) === String(orderId)) || state.selected;
+  state.editing = false;
+  renderTable();
+  renderForm(handlers);
+  show(data, data.file?.analysisMessage || "文件已上传，订单已生成");
+}
+
 async function loadOrderFiles() {
   if (!state.selected?.id) return;
   try {
@@ -334,6 +355,13 @@ el.logoutBtn.addEventListener("click", logout);
 el.clearDataBtn.addEventListener("click", () => clearBusinessData().catch(showError));
 el.refreshBtn.addEventListener("click", () => loadModule().catch(showError));
 el.newBtn.addEventListener("click", () => {
+  if (state.module === "orders") {
+    state.selected = null;
+    state.editing = false;
+    state.creatingOrderFromFile = true;
+    renderForm(handlers);
+    return;
+  }
   state.selected = defaultRecordForModule(state.module);
   state.editing = true;
   renderForm(handlers);
@@ -361,6 +389,7 @@ document.body.addEventListener("click", (event) => {
   const rowId = row.dataset.id;
   state.selected = state.records.find((record) => String(record.id) === rowId) || null;
   state.editing = false;
+  state.creatingOrderFromFile = false;
   if (state.module === "dashboard" && state.selected?.orderId) {
     loadOrderAggregate(state.selected.orderId, state.selected).catch(showError);
     return;
