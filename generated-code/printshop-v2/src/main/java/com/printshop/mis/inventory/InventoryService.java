@@ -6,7 +6,11 @@ import static com.printshop.mis.shared.MisSupport.text;
 
 import com.printshop.mis.audit.AuditTrailService;
 import com.printshop.common.exception.BusinessException;
+import com.printshop.mis.domain.InventoryConsumption;
 import com.printshop.mis.domain.InventoryItem;
+import com.printshop.mis.domain.PrintOrder;
+import com.printshop.mis.replenishment.ReplenishmentService;
+import com.printshop.mis.repository.InventoryConsumptionRepository;
 import com.printshop.mis.repository.InventoryItemRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,10 +25,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryService {
 
     private final InventoryItemRepository inventoryItems;
+    private final InventoryConsumptionRepository consumptions;
+    private final ReplenishmentService replenishmentService;
     private final AuditTrailService audit;
 
-    public InventoryService(InventoryItemRepository inventoryItems, AuditTrailService audit) {
+    public InventoryService(
+            InventoryItemRepository inventoryItems,
+            InventoryConsumptionRepository consumptions,
+            ReplenishmentService replenishmentService,
+            AuditTrailService audit
+    ) {
         this.inventoryItems = inventoryItems;
+        this.consumptions = consumptions;
+        this.replenishmentService = replenishmentService;
         this.audit = audit;
     }
 
@@ -70,13 +83,21 @@ public class InventoryService {
         ensureItem("PAPER-COATED-300G", "300g 铜版纸", "纸张", "张", new BigDecimal("2000"), new BigDecimal("200"), "大学城店");
         ensureItem("INK-COLOR", "彩色墨粉/墨水", "耗材", "份", new BigDecimal("1200"), new BigDecimal("120"), "大学城店");
         ensureItem("BINDING-CONSUMABLE", "装订耗材", "耗材", "套", new BigDecimal("800"), new BigDecimal("80"), "大学城店");
+        replenishmentService.ensureDefaultSuppliers();
     }
 
     public void consumeForProduction(String username, String productType, String colorMode, Integer pageCount, Integer copies) {
         ensureDefaultInventory();
         Map<String, BigDecimal> required = requiredMaterials(productType, colorMode, pageCount, copies);
         assertEnough(required);
-        required.forEach((sku, quantity) -> consume(username, sku, quantity));
+        required.forEach((sku, quantity) -> consume(username, sku, quantity, null));
+    }
+
+    public void consumeForProduction(String username, PrintOrder order) {
+        ensureDefaultInventory();
+        Map<String, BigDecimal> required = requiredMaterials(order.productType, order.colorMode, order.pageCount, order.copies);
+        assertEnough(required);
+        required.forEach((sku, quantity) -> consume(username, sku, quantity, order));
     }
 
     public void assertAvailableForProduction(String productType, String colorMode, Integer pageCount, Integer copies) {
@@ -126,12 +147,20 @@ public class InventoryService {
         });
     }
 
-    private void consume(String username, String sku, BigDecimal quantity) {
+    private void consume(String username, String sku, BigDecimal quantity, PrintOrder order) {
         InventoryItem item = inventoryItems.findBySku(sku).orElseThrow(() -> notFound("库存物料", -1L));
         if (item.quantity == null || item.quantity.compareTo(quantity) < 0) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "库存不足，不能扣减：" + item.itemName);
         }
         item.quantity = item.quantity.subtract(quantity);
+        InventoryConsumption consumption = new InventoryConsumption();
+        consumption.sku = item.sku;
+        consumption.itemName = item.itemName;
+        consumption.quantity = quantity;
+        consumption.storeName = order == null ? item.location : order.storeName;
+        consumption.orderNo = order == null ? null : order.orderNo;
+        consumption.consumedAt = com.printshop.mis.shared.MisSupport.now();
+        consumptions.save(consumption);
         audit.record(username, "INV", "CONSUME_INVENTORY", "INVENTORY", item.id, sku + " -" + quantity.toPlainString());
         inventoryItems.save(item);
     }

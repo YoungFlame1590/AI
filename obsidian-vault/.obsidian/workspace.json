@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "45cb56005297951f",
+        "id": "c22a671e041c74f5",
         "type": "tabs",
         "children": [
           {
-            "id": "40bf6454020908bf",
+            "id": "96e0c1d5a145344e",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "高级软件设计实践_LLM提示词指南.md",
+                "file": "wiki/summaries/变更管理/CRR变更回归校验报告-v2.0.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "高级软件设计实践_LLM提示词指南"
+              "title": "CRR变更回归校验报告-v2.0"
             }
           }
         ]
@@ -183,43 +183,43 @@
       "bases:新建数据库": false
     }
   },
-  "active": "40bf6454020908bf",
+  "active": "96e0c1d5a145344e",
   "lastOpenFiles": [
-    "raw/notes/财务人员-20260616-1004-需求记录.md",
-    "raw/notes/财务人员-20260616-1003-需求记录.md",
-    "raw/notes/财务人员-20260616-1002-需求记录.md",
-    "raw/notes/门店店员-20260616-0958-需求记录.md",
-    "raw/notes/门店店员-20260616-0956-需求记录.md",
-    "raw/notes/门店店员-20260616-0955-需求记录.md",
-    "raw/notes/门店店员-20260616-0957-需求记录.md",
-    "raw/notes/系统管理员-20260616-1008-需求记录.md",
-    "raw/notes/系统管理员-20260616-1009-需求记录.md",
-    "raw/notes/系统管理员-20260616-1010-需求记录.md",
-    "raw/notes/总部运营管理员-20260616-1000-需求记录.md",
-    "raw/notes/总部运营管理员-20260616-1002-需求记录.md",
-    "raw/notes/总部运营管理员-20260616-1001-需求记录.md",
-    "raw/notes/门店店员-20260616-0941-需求记录.md",
-    "raw/notes/配送外协人员-20260616-1008-需求记录.md",
-    "raw/notes/配送外协人员-20260616-1007-需求记录.md",
-    "raw/notes/配送外协人员-20260616-1006-需求记录.md",
-    "raw/notes/客户-20260616-1006-需求记录.md",
-    "raw/notes/客户-20260616-1005-需求记录.md",
-    "raw/notes/客户-20260616-1004-需求记录.md",
-    "raw/notes/门店店长-20260616-1000-需求记录.md",
-    "raw/notes/门店店长-20260616-0959-需求记录.md",
-    "raw/notes/门店店长-20260616-0958-需求记录.md",
-    "raw/notes/总部运营管理员-20260616-0953-需求记录.md",
-    "raw/notes/总部运营管理员-20260616-0952-需求记录.md",
-    "raw/notes/门店店长-20260616-0954-需求记录.md",
-    "__pycache__/app.cpython-312.pyc",
-    "__pycache__",
-    "agents/__pycache__/recording.cpython-312.pyc",
-    "agents/__pycache__/llm_config.cpython-312.pyc",
-    "agents/__pycache__/a1b_elicitor.cpython-312.pyc",
-    "agents/__pycache__/__init__.cpython-312.pyc",
-    "agents/__pycache__/a1a_stakeholders.cpython-312.pyc",
-    "agents/__pycache__",
-    "启动需求获取页面.bat",
-    "web/styles.css"
+    "wiki/summaries/变更管理/CR-001-订单变更冻结.md",
+    "wiki/summaries/变更管理/CIA-CR-001-订单变更冻结.md",
+    "wiki/summaries/变更管理/ADR-005-订单变更冻结-v1.0.md",
+    "wiki/summaries/变更管理/需求差异-BL-20260618-03-to-BL-20260624-01.md",
+    "wiki/summaries/RCR逆向校验报告-v1.0.md",
+    "wiki/summaries/MDS-模块划分方案-v1.0.md",
+    "wiki/summaries/DTS-依赖拓扑-v1.0.md",
+    "wiki/summaries/ASD-架构风格声明-v1.0.md",
+    "wiki/summaries/ADR-004-横切审计与防腐层-v1.0.md",
+    "wiki/summaries/ADR-003-依赖拓扑-v1.0.md",
+    "wiki/summaries/ADR-002-模块拆分-v1.0.md",
+    "wiki/summaries/ADR-001-架构选型-v1.0.md",
+    "raw/notes/门店店员-20260701-0834-需求记录.md",
+    "wiki/summaries/设计资产包/五层设计资产包-README.md",
+    "wiki/summaries/测试报告/系统软件测试报告-v2.0.md",
+    "wiki/summaries/API契约/OpenAPI-接口契约-v2.2.yaml",
+    "wiki/summaries/设计资产包/知识图谱层资产清单.md",
+    "wiki/summaries/设计资产包/提示词模板层资产清单.md",
+    "wiki/summaries/设计资产包/子技能层资产清单.md",
+    "wiki/summaries/设计资产包/契约层资产清单.md",
+    "wiki/summaries/设计资产包/代码层资产清单.md",
+    "wiki/summaries/设计资产包",
+    "wiki/summaries/子技能/需求质量分析/SKILL.md",
+    "wiki/summaries/子技能/设计漂移检测/SKILL.md",
+    "wiki/summaries/子技能/系统测试报告生成/SKILL.md",
+    "wiki/summaries/子技能/OpenAPI契约合规校验/SKILL.md",
+    "wiki/summaries/子技能/CIA变更影响分析/SKILL.md",
+    "wiki/summaries/子技能/需求质量分析",
+    "wiki/summaries/子技能/设计漂移检测",
+    "wiki/summaries/子技能/系统测试报告生成",
+    "wiki/summaries/子技能/OpenAPI契约合规校验",
+    "wiki/summaries/子技能/CIA变更影响分析",
+    "wiki/summaries/子技能",
+    "wiki/summaries/代码生成/v2代码变更说明.md",
+    "wiki/summaries/测试报告",
+    "wiki/summaries/API契约/OpenAPI-接口契约-v2.1.yaml"
   ]
 }

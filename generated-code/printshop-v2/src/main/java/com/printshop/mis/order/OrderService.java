@@ -222,6 +222,55 @@ public class OrderService {
         }
     }
 
+    public OrderFile attachGeneratedFile(String username, Long orderId, String fileName, String contentType, byte[] content) {
+        UserAccount user = identityService.requireUser(username);
+        PrintOrder order = access.requireVisibleOrder(user, orderId);
+        Path target = null;
+        try {
+            Files.createDirectories(uploadRoot);
+            String originalName = safeOriginalName(fileName == null ? "online-design.pdf" : fileName);
+            String extension = extensionOf(originalName);
+            String storageName = UUID.randomUUID() + "." + text(extension, "pdf");
+            target = uploadRoot.resolve(storageName).normalize();
+            if (!target.startsWith(uploadRoot)) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "文件名不合法。");
+            }
+            byte[] safeContent = content == null || content.length == 0
+                    ? "%PDF-1.4\n% PrintShop generated design placeholder\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                    : content;
+            Files.write(target, safeContent);
+
+            OrderFile file = new OrderFile();
+            file.orderId = orderId;
+            file.fileName = originalName;
+            file.filePath = target.toString();
+            file.contentType = text(contentType, "application/pdf");
+            file.storageName = storageName;
+            file.sizeBytes = (long) safeContent.length;
+            file.fileStatus = "GENERATED";
+            file.versionNo = Math.toIntExact(files.countByOrderId(orderId) + 1);
+            file.uploadedBy = user.displayName;
+            file.uploadedRole = user.role;
+            file.reviewStatus = "PENDING";
+            file.analysisStatus = "GENERATED";
+            file.analysisMessage = "在线设计编辑器生成的可审核设计稿。";
+            file.analyzedAt = now();
+            file.uploadedAt = now();
+            order.currentStep = "在线设计稿已生成，等待门店审核文件";
+            order.updatedAt = now();
+            orders.save(order);
+            OrderFile saved = files.save(file);
+            audit.record(username, "ORD", "GENERATE_DESIGN_FILE", "ORDER_FILE", saved.id, file.fileName);
+            return saved;
+        } catch (IOException ex) {
+            deleteStoredFile(target);
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "设计稿保存失败：" + ex.getMessage());
+        } catch (RuntimeException | Error ex) {
+            deleteStoredFile(target);
+            throw ex;
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<OrderFile> orderFiles(String username, Long orderId) {
         access.requireVisibleOrder(identityService.requireUser(username), orderId);

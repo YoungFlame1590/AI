@@ -1,0 +1,12 @@
+{
+  "serverType": "plantuml",
+  "plantumlServerUrl": "https://www.plantuml.com/plantuml",
+  "krokiServerUrl": "https://kroki.io",
+  "krokiDiagramType": "plantuml",
+  "localServerUrl": "http://localhost:8000",
+  "imageFormat": "svg",
+  "autoRefresh": true,
+  "lastOpenedPumlPath": "wiki/baselines/BL-20260618-02/UML模型/活动图-异常兜底-v1.0.puml",
+  "embeddedDefaultView": "diagram",
+  "embeddedDiagramAlign": "center"
+}

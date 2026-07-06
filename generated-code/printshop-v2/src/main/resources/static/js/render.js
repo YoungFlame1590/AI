@@ -34,6 +34,9 @@ export function activeRecordConfig() {
   if (state.module === "deliveryTasks" && state.user?.role === "COURIER") {
     return { ...modules.deliveryTasks, readonly: true };
   }
+  if (state.module === "designTemplates" && !["OPS", "ADMIN"].includes(state.user?.role)) {
+    return { ...modules.designTemplates, readonly: true };
+  }
   return modules[state.module] || modules.orders;
 }
 
@@ -103,6 +106,10 @@ export function renderForm(handlers) {
     renderReadonlyActions(config, handlers);
     return;
   }
+  if (state.module === "designProjects") {
+    renderDesignProjectDetail(record, handlers);
+    return;
+  }
   for (const [field, label, type, options] of config.fields || []) {
     const node = createFieldNode(field, type, options, record[field]);
     node.name = field;
@@ -132,6 +139,8 @@ export function renderForm(handlers) {
     if (state.selected?.id && !state.editing && (state.module !== "users" || state.selected.active)) {
       addAction("删除", handlers.deleteRecord, "danger");
     }
+  } else {
+    renderReadonlyActions(config, handlers);
   }
   const showManagementActions = state.module !== "orders" || state.user?.role === "ADMIN";
   for (const [label, method, pathFactory, body, actionKey] of showManagementActions ? (config.actions || []) : []) {
@@ -146,6 +155,68 @@ export function renderForm(handlers) {
     addAction("上传文件", handlers.uploadOrderFile);
     addAction("查看文件", handlers.loadOrderFiles);
   }
+}
+
+function renderDesignProjectDetail(record = {}, handlers) {
+  renderTimeline([]);
+  if (!state.selected) {
+    el.detailTitle.textContent = "在线设计";
+    el.recordActions.innerHTML = "";
+    el.recordForm.innerHTML = "<p class=\"empty wide\">请先从模板市场创建一个设计项目。</p>";
+    return;
+  }
+  el.detailTitle.textContent = `在线设计 · ${record.title || record.projectNo}`;
+  const canvasJson = record.canvasJson || "{}";
+  el.recordForm.innerHTML = `
+    <section class="design-editor wide">
+      <div class="design-toolbar">
+        <div><span>项目</span><strong>${formatCell(record.projectNo)} · V${formatCell(record.currentVersionNo)}</strong></div>
+        <div><span>状态</span><strong>${formatCell(record.status, "status")}</strong></div>
+        <div><span>订单</span><strong>${formatCell(record.submittedOrderId)}</strong></div>
+      </div>
+      <canvas id="designCanvas" width="480" height="300" aria-label="在线设计画布预览"></canvas>
+      <label class="wide">
+        画布JSON
+        <textarea name="canvasJson">${escapeHtml(canvasJson)}</textarea>
+      </label>
+    </section>
+  `;
+  el.recordActions.innerHTML = "";
+  const config = activeRecordConfig();
+  renderReadonlyActions(config, handlers);
+  drawDesignCanvas(canvasJson);
+}
+
+function drawDesignCanvas(canvasJson) {
+  const canvas = document.getElementById("designCanvas");
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "#c5d1dc";
+  context.lineWidth = 2;
+  context.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
+  let objects = [];
+  try {
+    objects = JSON.parse(canvasJson || "{}").objects || [];
+  } catch {
+    objects = [{ type: "text", text: "画布JSON格式待修正", x: 80, y: 140 }];
+  }
+  objects.forEach((item, index) => {
+    const x = Number(item.x || 60 + index * 20);
+    const y = Number(item.y || 60 + index * 38);
+    context.fillStyle = item.type === "qr" ? "#174f49" : item.type === "image" ? "#2f6cbd" : "#17212b";
+    if (["qr", "logo", "image"].includes(item.type)) {
+      context.strokeStyle = context.fillStyle;
+      context.strokeRect(x, y, item.type === "image" ? 150 : 74, item.type === "image" ? 90 : 74);
+      context.font = "13px Microsoft YaHei, Arial";
+      context.fillText(item.text || item.type, x + 8, y + 38);
+      return;
+    }
+    context.font = index === 0 ? "22px Microsoft YaHei, Arial" : "16px Microsoft YaHei, Arial";
+    context.fillText(item.text || "文本", x, y);
+  });
 }
 
 function renderInitialOrderUpload(handlers) {
@@ -229,6 +300,7 @@ function renderReportIndex() {
   const report = state.records[0] || {};
   const operations = report.operations || {};
   const finance = report.finance || {};
+  const serviceQuality = report.serviceQuality || {};
   const lowStock = report.lowStock || [];
   const productionLoad = report.productionLoad || [];
   const rows = [
@@ -237,6 +309,8 @@ function renderReportIndex() {
     ["活跃订单", operations.activeOrders ?? 0],
     ["收款笔数", finance.paymentCount ?? 0],
     ["已开票数", finance.issuedInvoiceCount ?? 0],
+    ["平均评分", serviceQuality.averageRating ?? 0],
+    ["未关闭客诉", serviceQuality.complaintOpenCount ?? 0],
     ["低库存物料", Array.isArray(lowStock) ? lowStock.length : 0],
     ["生产任务", Array.isArray(productionLoad) ? productionLoad.length : 0],
   ];
@@ -254,8 +328,10 @@ function renderReportDetail(report = {}) {
   el.recordActions.innerHTML = "";
   const operations = report.operations || {};
   const finance = report.finance || {};
+  const serviceQuality = report.serviceQuality || {};
   const lowStock = Array.isArray(report.lowStock) ? report.lowStock : [];
   const productionLoad = Array.isArray(report.productionLoad) ? report.productionLoad : [];
+  const purchaseSuggestions = Array.isArray(report.purchaseSuggestions) ? report.purchaseSuggestions : [];
   const financeSummary = [
     ["收款金额", finance.paidAmount ?? 0, "paidAmount"],
     ["退款金额", finance.refundAmount ?? 0, "refundAmount"],
@@ -277,6 +353,8 @@ function renderReportDetail(report = {}) {
         <div><span>收款金额</span><strong class="amount-cell">${formatCell(finance.paidAmount ?? 0, "paidAmount")}</strong></div>
         <div><span>退款金额</span><strong class="amount-cell">${formatCell(finance.refundAmount ?? 0, "refundAmount")}</strong></div>
         <div><span>已开票</span><strong>${formatCell(finance.issuedInvoiceCount ?? 0)}</strong></div>
+        <div><span>平均评分</span><strong>${formatCell(serviceQuality.averageRating ?? 0)}</strong></div>
+        <div><span>未关闭客诉</span><strong>${formatCell(serviceQuality.complaintOpenCount ?? 0)}</strong></div>
       </div>
       <div class="report-section-grid">
         ${reportObjectTable("订单漏斗", report.orderFunnel, ["状态", "数量"])}
@@ -287,6 +365,8 @@ function renderReportDetail(report = {}) {
         ${storeSummaryTable(report.storeSummary)}
         ${reportArrayTable("生产负载", productionLoad, ["taskNo", "station", "operatorName", "status", "progressPercent"])}
         ${reportArrayTable("低库存预警", lowStock, ["sku", "itemName", "category", "quantity", "safetyStock"])}
+        ${reportObjectTable("服务质量", serviceQuality.storeRatings || {}, ["门店", "评分"])}
+        ${reportArrayTable("采购建议", purchaseSuggestions, ["suggestionNo", "sku", "recommendedQuantity", "estimatedCost", "status"])}
       </div>
     </section>
   `;
@@ -548,11 +628,12 @@ function renderChangeRequestDetail(record = {}) {
 
 function renderReadonlyActions(config, handlers) {
   for (const [label, method, pathFactory, body, actionKey] of config.actions || []) {
-    if (state.selected?.id && !state.editing) {
+    const canRunWithoutSelection = typeof pathFactory === "function" && pathFactory.length === 0;
+    if ((state.selected?.id || canRunWithoutSelection) && !state.editing) {
       if (actionKey && !(actionRoles[actionKey] || []).includes(state.user?.role)) {
         continue;
       }
-      addAction(label, () => handlers.runRecordAction(method, pathFactory(state.selected.id), body || {}));
+      addAction(label, () => handlers.runRecordAction(method, pathFactory(state.selected?.id), body || {}));
     }
   }
 }
@@ -630,9 +711,16 @@ function labelForColumn(column, config = null) {
   const labels = {
     actionLabel: "待办动作",
     amountDelta: "金额差异",
+    averageRating: "平均评分",
     carrierName: "承运人",
+    channelName: "配送渠道",
     currentStep: "当前步骤",
     customerName: "客户",
+    deliveryFee: "配送费",
+    dynamicSafetyStock: "动态安全库存",
+    estimatedCost: "预计成本",
+    estimatedFee: "预估费用",
+    externalStatus: "外部状态",
     contentType: "文件类型",
     fileName: "文件名",
     fileActions: "文件操作",
@@ -663,6 +751,9 @@ function labelForColumn(column, config = null) {
     uploadedRole: "上传角色",
     versionNo: "版本",
     reviewStatus: "审核状态",
+    recommendedQuantity: "建议数量",
+    suggestionNo: "采购建议号",
+    trackingNo: "运单号",
   };
   return labels[column] || column;
 }

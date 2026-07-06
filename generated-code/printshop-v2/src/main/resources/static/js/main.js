@@ -188,6 +188,19 @@ async function runRecordAction(method, path, body) {
   if (requiresConfirmation(path) && !confirm("这是不可逆业务动作，确认继续执行？")) return;
   if (body === "__changeRequestFromOrder") {
     body = buildOrderChangeRequestBody();
+  } else if (body === "__designProjectFromTemplate") {
+    body = buildDesignProjectBody();
+  } else if (body === "__designVersion") {
+    body = buildDesignVersionBody();
+  } else if (body === "__designSubmitOrder") {
+    body = buildDesignSubmitOrderBody();
+  } else if (body === "__deliveryQuoteFromOrder") {
+    body = buildDeliveryQuoteBody();
+  } else if (body === "__serviceReviewFromInvitation") {
+    path = `/api/orders/${state.selected?.orderId}/service-reviews`;
+    body = buildServiceReviewBody();
+  } else if (body === "__complaintReply") {
+    body = { reply: "已联系客户并记录处理方案，24小时内跟进完成。" };
   }
   const data = await api(path, { method, body: JSON.stringify(body) });
   await loadModule(state.module);
@@ -250,6 +263,52 @@ function buildOrderChangeRequestBody() {
     deliveryMode: order.deliveryMode || "同城配送",
     priority: order.priority === "加急" ? "普通" : "加急",
     reason: "客户/店员申请处理中订单规格或时效变更",
+  };
+}
+
+function buildDesignProjectBody() {
+  const template = state.selected || {};
+  return {
+    templateId: template.id,
+    title: `${template.title || "在线模板"}设计稿`,
+    canvasJson: template.canvasJson || "{}",
+  };
+}
+
+function buildDesignVersionBody() {
+  const textarea = el.recordForm.querySelector("[name='canvasJson']");
+  return {
+    label: "页面手动保存",
+    canvasJson: textarea?.value || state.selected?.canvasJson || "{}",
+  };
+}
+
+function buildDesignSubmitOrderBody() {
+  return {
+    copies: Number(state.selected?.defaultCopies || 100),
+    deliveryMode: "到店自提",
+    priority: "普通",
+  };
+}
+
+function buildDeliveryQuoteBody() {
+  const order = state.selected || {};
+  return {
+    orderId: order.id,
+    channelCode: order.priority === "特急" ? "IMMEDIATE" : "EXPRESS",
+    pickupAddress: order.storeName || "门店",
+    deliveryAddress: "客户收货地址",
+    packageWeightKg: Math.max(0.5, Number(order.copies || 1) / 100),
+  };
+}
+
+function buildServiceReviewBody() {
+  return {
+    printQualityRating: 5,
+    timelinessRating: 5,
+    staffRating: 5,
+    valueRating: 5,
+    comment: "服务顺利完成，系统自动提交演示评价。",
   };
 }
 

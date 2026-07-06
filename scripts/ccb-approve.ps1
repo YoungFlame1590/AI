@@ -2,6 +2,24 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $vaultRoot = Join-Path $repoRoot "obsidian-vault"
+$n8nPortFile = Join-Path $repoRoot ".n8n-port"
+
+function Get-N8nPort {
+    if (-not [string]::IsNullOrWhiteSpace($env:N8N_HOST_PORT)) {
+        return [int]$env:N8N_HOST_PORT
+    }
+    if (Test-Path -LiteralPath $n8nPortFile) {
+        $portText = (Get-Content -LiteralPath $n8nPortFile -Raw).Trim()
+        if ($portText -match '^\d+$') {
+            return [int]$portText
+        }
+    }
+    return 5678
+}
+
+function Get-N8nBaseUrl {
+    return "http://localhost:$(Get-N8nPort)"
+}
 
 function Get-LatestPendingFile {
     if (-not (Test-Path -LiteralPath $vaultRoot)) {
@@ -44,7 +62,10 @@ if ([string]::IsNullOrWhiteSpace($resumeUrl)) {
     throw "Pending file does not contain resumeUrl: $($pendingFile.FullName)"
 }
 
-$resumeUrl = $resumeUrl.Replace("http://host.docker.internal:5678", "http://localhost:5678")
+$n8nBaseUrl = Get-N8nBaseUrl
+$resumeUrl = $resumeUrl `
+    -replace "http://host\.docker\.internal:\d+", $n8nBaseUrl `
+    -replace "http://localhost:\d+", $n8nBaseUrl
 
 Write-Host "Pending CCB file: $($pendingFile.FullName)"
 Write-Host "Latest SRS: $($pending.latestSrs)"
@@ -91,4 +112,4 @@ $result = Invoke-RestMethod `
 
 Write-Host "[OK] CCB decision submitted."
 $result | ConvertTo-Json -Depth 8
-Write-Host "Open n8n executions: http://localhost:5678"
+Write-Host "Open n8n executions: $n8nBaseUrl"

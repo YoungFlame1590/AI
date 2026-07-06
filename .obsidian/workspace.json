@@ -1,0 +1,221 @@
+{
+  "main": {
+    "id": "abe9ff8987c23256",
+    "type": "split",
+    "children": [
+      {
+        "id": "a525db8d394b2e14",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5297d55346e767ae",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "CR09图文快印门店连锁管理系统变更需求文档.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "CR09图文快印门店连锁管理系统变更需求文档"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fa96a6a0bd7debbb",
+    "type": "split",
+    "children": [
+      {
+        "id": "d8f9612e9b12c852",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "bb70df717514014f",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "97c8141cc4ff7ee3",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "354ce0939c985667",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "e367066c95b4f32f",
+    "type": "split",
+    "children": [
+      {
+        "id": "6851b13925106a40",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7315caee833cea6f",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "README.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "README 的反向链接列表"
+            }
+          },
+          {
+            "id": "728a87186acdb799",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "README.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "README 的出链列表"
+            }
+          },
+          {
+            "id": "21ffc1377d4f9738",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "71ffbb2ab7a8c84e",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "10a2efb2abe2905d",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "README.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "README 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "5297d55346e767ae",
+  "lastOpenFiles": [
+    "generated-code/printshop-v2/src/main/java/com/printshop/mis/domain/DesignProjectVersion.java",
+    "generated-code/printshop-v2/src/main/java/com/printshop/mis/domain/DeliveryTrackingEvent.java",
+    "generated-code/printshop-v2/src/main/java/com/printshop/mis/domain/DeliveryQuote.java",
+    "generated-code/printshop-v2/src/main/java/com/printshop/mis/domain/ComplaintTicket.java",
+    "generated-code/printshop-v2/target/demo-uploads-v2/bfad466a-0a30-4f85-918b-7d5c960e54f4.pdf",
+    "generated-code/printshop-v2/target/system-test-uploads/7c414497-1167-4a6c-9066-5d09fab0cf48.pdf",
+    "generated-code/printshop-v2/target/system-test-uploads/277ae9d0-83fa-4834-bb7c-afa37d5c025a.pdf",
+    "generated-code/printshop-v2/target/system-test-uploads/4b927fd9-5dfb-48c3-bb43-430ae25f17b0.psd",
+    "generated-code/printshop-v2/target/system-test-uploads/d7360db4-1494-467b-b2a2-53bf829e0ddf.png",
+    "generated-code/printshop-v2/target/system-test-uploads/a3dc9770-2376-411d-9d54-e1924306e080.pdf",
+    "generated-code/printshop-v2/target/system-test-uploads/fa88c9cb-7bea-46cb-beaf-221f55874d05.pdf",
+    "generated-code/printshop-v2/target/system-test-uploads/2fc4e470-4bc7-4930-978a-72b1cdcba2c6.pdf",
+    "generated-code/printshop-v2/target/system-test-uploads/adc49257-174b-412b-8674-d10802d00389.png",
+    "generated-code/printshop-v2/target/system-test-uploads/96413d9a-c279-4053-9226-d13a6972c6f1.png",
+    "generated-code/printshop-v2/target/system-test-uploads/ffc93358-d176-4852-b297-1960fef40b59.png",
+    "generated-code/printshop-v2/target/system-test-uploads/04623fcf-64e9-4f53-b7f7-14cc1fe78b68.png",
+    "generated-code/printshop-v2/target/system-test-uploads/82e71ee6-3ebf-4846-a04b-b05cccf088c3.png",
+    "CR09图文快印门店连锁管理系统变更需求文档.md",
+    "obsidian-vault/wiki/baselines/BL-20260624-01/基线说明.md",
+    "obsidian-vault/raw/notes/门店店员-20260701-0834-需求记录.md",
+    "obsidian-vault/wiki/baselines/BL-20260624-01/需求差异-BL-20260618-03-to-BL-20260624-01.md",
+    "obsidian-vault/wiki/summaries/UML模型/建模决策说明-v1.0.md",
+    "obsidian-vault/wiki/summaries/UML模型/建模决策说明-v1.1.md",
+    "obsidian-vault/wiki/summaries/SRS-初稿-v1.5.md",
+    "obsidian-vault/高级软件设计实践_LLM提示词指南.md",
+    "obsidian-vault/00-首页.md",
+    "obsidian-vault/A6_需求基线智能体_提示词.md",
+    "obsidian-vault/n8n_工作流1_提示词.md",
+    "generated-code/printshop-v1/docs/操作流程.md",
+    "generated-code/printshop-v1/README.md",
+    "README.md",
+    "AGENTS.md"
+  ]
+}

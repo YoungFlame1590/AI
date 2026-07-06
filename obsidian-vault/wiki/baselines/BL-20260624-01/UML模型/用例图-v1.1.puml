@@ -1,0 +1,45 @@
+@startuml
+left to right direction
+actor 客户 as C
+actor 门店店员 as Clerk
+actor 门店店长 as Manager
+actor 总部运营管理员 as HQ
+actor 财务人员 as Fin
+actor 配送外协人员 as Delivery
+actor 系统管理员 as SysAdmin
+
+rectangle 图文快印门店连锁管理系统 {
+  usecase UC_Submit as 提交订单与文件
+  usecase UC_Check as 文件合规校验
+  usecase UC_Quote as 录入参数与报价
+  usecase UC_Calc as 阶梯价自动计算
+  usecase UC_Discount as 折扣特批
+  usecase UC_Dispatch as 排产调度
+  usecase UC_Route as 跨店派单路由
+  usecase UC_Emergency as 应急开关放行
+  usecase UC_Deliver as 执行配送任务
+  usecase UC_Pickup as 取件确认
+  usecase UC_Invoice as 发票开具与红冲
+  usecase UC_Reconcile as 日结对账
+  usecase UC_Config as 权限与路由配置
+
+  C --> UC_Submit
+  Clerk --> UC_Quote
+  Manager --> UC_Discount
+  Manager --> UC_Dispatch
+  HQ --> UC_Route
+  Fin --> UC_Invoice
+  Fin --> UC_Reconcile
+  Delivery --> UC_Deliver
+  SysAdmin --> UC_Config
+  C --> UC_Pickup
+
+  UC_Submit ..> UC_Check : include
+  UC_Quote ..> UC_Calc : include
+  UC_Dispatch ..> UC_Route : include
+  UC_Discount .> UC_Quote : extend
+  UC_Emergency .> UC_Dispatch : extend
+  UC_Invoice .> UC_Pickup : extend
+  UC_Reconcile ..> UC_Invoice : include
+}
+@enduml

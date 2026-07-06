@@ -5,6 +5,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -21,5 +22,10 @@ public class DeliveryTask {
     public String targetStore;
     public String status;
     public String signedBy;
+    public String deliveryChannel;
+    public String trackingNo;
+    public BigDecimal deliveryFee = BigDecimal.ZERO;
+    public String externalStatus;
+    public Integer estimatedMinutes;
     public LocalDateTime updatedAt;
 }

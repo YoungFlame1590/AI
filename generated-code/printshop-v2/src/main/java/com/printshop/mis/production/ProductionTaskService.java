@@ -119,7 +119,7 @@ public class ProductionTaskService {
         task.status = "DONE";
         task.progressPercent = 100;
         task.qualityStatus = "PASS";
-        inventoryService.consumeForProduction(username, order.productType, order.colorMode, order.pageCount, order.copies);
+        inventoryService.consumeForProduction(username, order);
         order.status = OrderStatusPolicy.PRODUCTION_DONE;
         order.currentStep = "生产质检完成，等待生成配送或客户自提";
         order.updatedAt = com.printshop.mis.shared.MisSupport.now();

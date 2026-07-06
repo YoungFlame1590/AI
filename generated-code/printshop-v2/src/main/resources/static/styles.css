@@ -490,6 +490,48 @@ tr.selected {
   color: #607485;
 }
 
+.design-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.design-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.design-toolbar div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+  padding: 8px 10px;
+}
+
+.design-toolbar span,
+.design-toolbar strong {
+  display: block;
+}
+
+.design-toolbar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.design-toolbar strong {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+#designCanvas {
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
 .aggregate-summary,
 .aggregate-section {
   grid-column: 1 / -1;
@@ -907,6 +949,7 @@ tr.selected {
   .metrics,
   .record-form,
   .aggregate-summary,
+  .design-toolbar,
   .report-summary,
   .report-section-grid,
   .report-section-grid-wide,

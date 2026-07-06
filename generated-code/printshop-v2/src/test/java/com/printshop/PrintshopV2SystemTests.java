@@ -1004,6 +1004,178 @@ class PrintshopV2SystemTests {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void shouldCreateDesignProjectVersionAndSubmitOrderFromTemplate() throws Exception {
+        MvcResult templates = mockMvc.perform(get("/api/design-templates")
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andReturn();
+        Integer templateId = JsonPath.read(templates.getResponse().getContentAsString(), "$.data[0].id");
+
+        MvcResult project = mockMvc.perform(post("/api/design-projects")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "templateId": %d,
+                                  "title": "测试在线设计",
+                                  "canvasJson": "{\\"objects\\":[{\\"type\\":\\"text\\",\\"text\\":\\"测试名片\\",\\"x\\":80,\\"y\\":80}]}"
+                                }
+                                """.formatted(templateId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.project.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.versions.length()").value(1))
+                .andReturn();
+        Integer projectId = JsonPath.read(project.getResponse().getContentAsString(), "$.data.project.id");
+
+        mockMvc.perform(post("/api/design-projects/{id}/versions", projectId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "label": "替换Logo",
+                                  "canvasJson": "{\\"objects\\":[{\\"type\\":\\"logo\\",\\"text\\":\\"ACME\\",\\"x\\":110,\\"y\\":90}]}"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.project.currentVersionNo").value(2));
+
+        mockMvc.perform(post("/api/design-projects/{id}/restore/{versionNo}", projectId, 1)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.project.currentVersionNo").value(1));
+
+        MvcResult submitted = mockMvc.perform(post("/api/design-projects/{id}/submit-order", projectId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"copies\":120,\"deliveryMode\":\"到店自提\",\"priority\":\"普通\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.project.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.data.order.id").exists())
+                .andExpect(jsonPath("$.data.file.fileStatus").value("GENERATED"))
+                .andReturn();
+        Integer orderId = JsonPath.read(submitted.getResponse().getContentAsString(), "$.data.order.id");
+
+        mockMvc.perform(get("/api/orders/{id}/files", orderId)
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].analysisStatus").value("GENERATED"));
+    }
+
+    @Test
+    void shouldGenerateDynamicReplenishmentAndApprovePurchaseSuggestion() throws Exception {
+        MvcResult order = createOrder("customer", "培训手册", "彩色", 20, 4, "到店自提", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+        progressToDelivery(orderId);
+
+        Integer paperId = inventoryItemId("PAPER-A4-80G");
+        BigDecimal paperQuantity = inventoryQuantity("PAPER-A4-80G");
+        mockMvc.perform(post("/api/inventory-items/{id}/adjust", paperId)
+                        .with(httpBasic("admin", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"delta\":-%s}".formatted(paperQuantity.toPlainString())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/replenishment/recommendations")
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("dynamicSafetyStock")));
+
+        MvcResult suggestions = mockMvc.perform(post("/api/replenishment/recalculate")
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andReturn();
+        Integer suggestionId = JsonPath.read(suggestions.getResponse().getContentAsString(), "$.data[0].id");
+
+        mockMvc.perform(post("/api/purchase-suggestions/{id}/approve", suggestionId)
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+    }
+
+    @Test
+    void shouldQuoteThirdPartyDeliveryTrackAndCreateFeedbackComplaint() throws Exception {
+        MvcResult order = createOrder("customer", "宣传单页", "彩色", 2, 50, "同城配送", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+        progressToProductionDone(orderId);
+
+        MvcResult quote = mockMvc.perform(post("/api/delivery-quotes")
+                        .with(httpBasic("ops", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderId": %d,
+                                  "channelCode": "IMMEDIATE",
+                                  "pickupAddress": "大学城店",
+                                  "deliveryAddress": "客户公司前台",
+                                  "packageWeightKg": 1.5
+                                }
+                                """.formatted(orderId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.estimatedFee").exists())
+                .andReturn();
+        Integer quoteId = JsonPath.read(quote.getResponse().getContentAsString(), "$.data.id");
+
+        MvcResult task = mockMvc.perform(post("/api/delivery-quotes/{id}/confirm", quoteId)
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.trackingNo").exists())
+                .andReturn();
+        Integer taskId = JsonPath.read(task.getResponse().getContentAsString(), "$.data.id");
+
+        mockMvc.perform(post("/api/delivery-tasks/{id}/sync-tracking", taskId)
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.events.length()", greaterThanOrEqualTo(2)));
+
+        mockMvc.perform(post("/api/delivery-tasks/{id}/sign", taskId)
+                        .with(httpBasic("ops", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"signedBy\":\"客户签收\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/service-review-invitations")
+                        .with(httpBasic("customer", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("PENDING")));
+
+        mockMvc.perform(post("/api/orders/{orderId}/service-reviews", orderId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "printQualityRating": 2,
+                                  "timelinessRating": 2,
+                                  "staffRating": 1,
+                                  "valueRating": 2,
+                                  "comment": "配送延误且沟通不足"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.overallRating").value(2));
+
+        MvcResult complaints = mockMvc.perform(get("/api/complaint-tickets")
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andReturn();
+        Integer complaintId = JsonPath.read(complaints.getResponse().getContentAsString(), "$.data[0].id");
+
+        mockMvc.perform(post("/api/complaint-tickets/{id}/reply", complaintId)
+                        .with(httpBasic("manager", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reply\":\"已联系客户重印并补偿配送费\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("REPLIED"));
+
+        mockMvc.perform(post("/api/complaint-tickets/{id}/close", complaintId)
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CLOSED"));
+    }
+
     private MvcResult createOrder(String username, String productType, String colorMode, int pageCount, int copies, String deliveryMode, String priority) throws Exception {
         return mockMvc.perform(post("/api/orders")
                         .with(httpBasic(username, "demo123"))
@@ -1150,6 +1322,13 @@ class PrintshopV2SystemTests {
     }
 
     private void progressToDelivery(Integer orderId) throws Exception {
+        progressToProductionDone(orderId);
+        mockMvc.perform(post("/api/orders/{id}/workflow/delivery-task", orderId)
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk());
+    }
+
+    private void progressToProductionDone(Integer orderId) throws Exception {
         progressToQuoted(orderId);
         mockMvc.perform(post("/api/orders/{id}/workflow/job-ticket", orderId)
                         .with(httpBasic("clerk", "demo123")))
@@ -1161,9 +1340,6 @@ class PrintshopV2SystemTests {
         Integer productionId = JsonPath.read(production.getResponse().getContentAsString(), "$.data.id");
         mockMvc.perform(post("/api/production-tasks/{id}/complete", productionId)
                         .with(httpBasic("manager", "demo123")))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/api/orders/{id}/workflow/delivery-task", orderId)
-                        .with(httpBasic("ops", "demo123")))
                 .andExpect(status().isOk());
     }
 

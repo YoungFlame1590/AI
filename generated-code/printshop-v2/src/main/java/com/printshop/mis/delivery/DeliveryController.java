@@ -34,6 +34,26 @@ public class DeliveryController {
         return api.ok(deliveryService.createDeliveryTask(principal.getName(), request));
     }
 
+    @PostMapping("/api/delivery-quotes")
+    public ApiResponse<?> createDeliveryQuote(Principal principal, @RequestBody Map<String, Object> request) {
+        return api.ok(deliveryService.createDeliveryQuote(principal.getName(), request));
+    }
+
+    @GetMapping("/api/delivery-quotes")
+    public ApiResponse<?> deliveryQuotes(Principal principal) {
+        return api.ok(deliveryService.deliveryQuotes(principal.getName()));
+    }
+
+    @PostMapping("/api/delivery-quotes/{id}/confirm")
+    public ApiResponse<?> confirmDeliveryQuote(Principal principal, @PathVariable Long id) {
+        return api.ok(deliveryService.confirmDeliveryQuote(principal.getName(), id));
+    }
+
+    @GetMapping("/api/orders/{orderId}/delivery-quotes")
+    public ApiResponse<?> deliveryQuotes(Principal principal, @PathVariable Long orderId) {
+        return api.ok(deliveryService.deliveryQuotes(principal.getName(), orderId));
+    }
+
     @GetMapping("/api/delivery-tasks/{id}")
     public ApiResponse<?> getDeliveryTask(Principal principal, @PathVariable Long id) {
         return api.ok(deliveryService.getDeliveryTask(principal.getName(), id));
@@ -47,6 +67,16 @@ public class DeliveryController {
     @PostMapping("/api/delivery-tasks/{id}/sign")
     public ApiResponse<?> signDelivery(Principal principal, @PathVariable Long id, @RequestBody Map<String, Object> request) {
         return api.ok(deliveryService.signDelivery(principal.getName(), id, request));
+    }
+
+    @PostMapping("/api/delivery-tasks/{id}/sync-tracking")
+    public ApiResponse<?> syncTracking(Principal principal, @PathVariable Long id) {
+        return api.ok(deliveryService.syncTracking(principal.getName(), id));
+    }
+
+    @GetMapping("/api/delivery-tasks/{id}/tracking")
+    public ApiResponse<?> trackingEvents(Principal principal, @PathVariable Long id) {
+        return api.ok(deliveryService.trackingEvents(principal.getName(), id));
     }
 
     @DeleteMapping("/api/delivery-tasks/{id}")
