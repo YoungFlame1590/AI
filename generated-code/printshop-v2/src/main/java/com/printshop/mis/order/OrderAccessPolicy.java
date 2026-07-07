@@ -68,12 +68,12 @@ public class OrderAccessPolicy {
 
     public Set<String> editableOrderFields(UserAccount user) {
         return switch (user.role) {
-            case "CUSTOMER" -> Set.of("productType", "colorMode", "pageCount", "copies", "deliveryMode", "priority");
-            case "CLERK", "MANAGER" -> Set.of("productType", "colorMode", "pageCount", "copies", "deliveryMode", "priority", "status", "currentStep");
+            case "CUSTOMER" -> Set.of("productType", "colorMode", "pageCount", "copies", "paperType", "craftType", "deliveryMode", "priority");
+            case "CLERK", "MANAGER" -> Set.of("productType", "colorMode", "pageCount", "copies", "sizeName", "paperType", "craftType", "deliveryMode", "priority", "status", "currentStep");
             case "OPS" -> Set.of("deliveryMode", "priority", "status", "currentStep");
             case "FINANCE" -> Set.of("paymentStatus", "currentStep");
             case "COURIER" -> Set.of("status", "currentStep");
-            case "ADMIN" -> Set.of("productType", "colorMode", "pageCount", "copies", "dueAt", "deliveryMode", "priority", "status", "paymentStatus", "currentStep");
+            case "ADMIN" -> Set.of("productType", "colorMode", "pageCount", "copies", "sizeName", "paperType", "craftType", "dueAt", "deliveryMode", "priority", "status", "paymentStatus", "currentStep");
             default -> Set.of();
         };
     }

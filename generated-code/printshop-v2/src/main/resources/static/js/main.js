@@ -20,6 +20,9 @@ const handlers = {
   createOrderFromFile,
   uploadOrderFile,
   loadOrderFiles,
+  saveDesignVersion,
+  restoreDesignVersion,
+  submitDesignOrder,
 };
 
 let registerMode = false;
@@ -96,6 +99,7 @@ async function loadModule(name = state.module) {
   state.module = name;
   state.editing = false;
   state.creatingOrderFromFile = false;
+  state.designProjectDetail = null;
   document.querySelectorAll(".nav button").forEach((button) => {
     button.classList.toggle("active", button.dataset.module === name);
   });
@@ -112,6 +116,9 @@ async function loadModule(name = state.module) {
   const data = await api(config.endpoint);
   state.records = Array.isArray(data) ? data : [data];
   state.selected = state.records[0] || null;
+  if (name === "designProjects" && state.selected?.id) {
+    state.designProjectDetail = await api(`/api/design-projects/${state.selected.id}`);
+  }
   renderTable();
   renderForm(handlers);
   renderMetrics([]);
@@ -233,6 +240,41 @@ async function runChangeTask(decision, changeRequestId) {
   show(data, decision === "approve" ? "变更已审批通过" : "变更已驳回");
 }
 
+async function saveDesignVersion(canvasJson) {
+  if (!state.selected?.id) return null;
+  const detail = await api(`/api/design-projects/${state.selected.id}/versions`, {
+    method: "POST",
+    body: JSON.stringify({ label: "编辑器保存", canvasJson }),
+  });
+  state.designProjectDetail = detail;
+  state.selected = detail.project;
+  show(detail, "设计版本已保存");
+  return detail;
+}
+
+async function restoreDesignVersion(versionNo) {
+  if (!state.selected?.id) return null;
+  const detail = await api(`/api/design-projects/${state.selected.id}/restore/${versionNo}`, {
+    method: "POST",
+  });
+  state.designProjectDetail = detail;
+  state.selected = detail.project;
+  show(detail, `已回溯到 V${versionNo}`);
+  return detail;
+}
+
+async function submitDesignOrder(payload, canvasJson) {
+  if (!state.selected?.id) return null;
+  await saveDesignVersion(canvasJson);
+  const data = await api(`/api/design-projects/${state.selected.id}/submit-order`, {
+    method: "POST",
+    body: JSON.stringify(payload || {}),
+  });
+  await loadModule("designProjects");
+  show(data, "设计稿已提交订单");
+  return data;
+}
+
 async function loadOrderAggregate(orderId, task = null, render = true) {
   state.selectedTask = task;
   const aggregate = await api(`/api/orders/${orderId}/aggregate`);
@@ -286,6 +328,8 @@ function buildDesignVersionBody() {
 function buildDesignSubmitOrderBody() {
   return {
     copies: Number(state.selected?.defaultCopies || 100),
+    paperType: "标准纸",
+    craftType: "无特殊工艺",
     deliveryMode: "到店自提",
     priority: "普通",
   };
@@ -455,6 +499,16 @@ document.body.addEventListener("click", (event) => {
   }
   state.aggregate = null;
   state.selectedTask = null;
+  if (state.module === "designProjects" && state.selected?.id) {
+    api(`/api/design-projects/${state.selected.id}`)
+      .then((detail) => {
+        state.designProjectDetail = detail;
+        renderTable();
+        renderForm(handlers);
+      })
+      .catch(showError);
+    return;
+  }
   renderTable();
   renderForm(handlers);
 });

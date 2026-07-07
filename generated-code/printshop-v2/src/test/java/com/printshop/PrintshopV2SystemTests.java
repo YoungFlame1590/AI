@@ -1012,6 +1012,7 @@ class PrintshopV2SystemTests {
                 .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
                 .andReturn();
         Integer templateId = JsonPath.read(templates.getResponse().getContentAsString(), "$.data[0].id");
+        String templateSizeName = JsonPath.read(templates.getResponse().getContentAsString(), "$.data[0].sizeName");
 
         MvcResult project = mockMvc.perform(post("/api/design-projects")
                         .with(httpBasic("customer", "demo123"))
@@ -1029,6 +1030,22 @@ class PrintshopV2SystemTests {
                 .andReturn();
         Integer projectId = JsonPath.read(project.getResponse().getContentAsString(), "$.data.project.id");
 
+        String largeCanvasJson = "{\"version\":\"5.3.0\",\"objects\":[{\"type\":\"textbox\",\"text\":\""
+                + "A".repeat(6200)
+                + "\",\"left\":40,\"top\":60}]}";
+        mockMvc.perform(post("/api/design-projects/{id}/versions", projectId)
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "label": "大画布容量",
+                                  "canvasJson": "%s"
+                                }
+                                """.formatted(jsonEscape(largeCanvasJson))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.project.currentVersionNo").value(2))
+                .andExpect(jsonPath("$.data.project.canvasJson").value(containsString("AAAA")));
+
         mockMvc.perform(post("/api/design-projects/{id}/versions", projectId)
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1039,7 +1056,7 @@ class PrintshopV2SystemTests {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.project.currentVersionNo").value(2));
+                .andExpect(jsonPath("$.data.project.currentVersionNo").value(3));
 
         mockMvc.perform(post("/api/design-projects/{id}/restore/{versionNo}", projectId, 1)
                         .with(httpBasic("customer", "demo123")))
@@ -1049,10 +1066,21 @@ class PrintshopV2SystemTests {
         MvcResult submitted = mockMvc.perform(post("/api/design-projects/{id}/submit-order", projectId)
                         .with(httpBasic("customer", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"copies\":120,\"deliveryMode\":\"到店自提\",\"priority\":\"普通\"}"))
+                        .content("""
+                                {
+                                  "copies": 120,
+                                  "deliveryMode": "到店自提",
+                                  "priority": "普通",
+                                  "paperType": "铜版纸250g",
+                                  "craftType": "覆膜+压痕"
+                                }
+                                """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.project.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.data.order.id").exists())
+                .andExpect(jsonPath("$.data.order.sizeName").value(templateSizeName))
+                .andExpect(jsonPath("$.data.order.paperType").value("铜版纸250g"))
+                .andExpect(jsonPath("$.data.order.craftType").value("覆膜+压痕"))
                 .andExpect(jsonPath("$.data.file.fileStatus").value("GENERATED"))
                 .andReturn();
         Integer orderId = JsonPath.read(submitted.getResponse().getContentAsString(), "$.data.order.id");
@@ -1081,6 +1109,12 @@ class PrintshopV2SystemTests {
                         .with(httpBasic("ops", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("dynamicSafetyStock")));
+
+        mockMvc.perform(get("/api/replenishment/forecast")
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("forecastNext30Days")))
+                .andExpect(content().string(containsString("averageMonthlyGrowthRate")));
 
         MvcResult suggestions = mockMvc.perform(post("/api/replenishment/recalculate")
                         .with(httpBasic("ops", "demo123")))
@@ -1174,6 +1208,17 @@ class PrintshopV2SystemTests {
                         .with(httpBasic("manager", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CLOSED"));
+
+        mockMvc.perform(get("/api/reports/store-quality-ranking")
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("averageRating")))
+                .andExpect(content().string(containsString("negativeRate")));
+
+        mockMvc.perform(get("/api/reports")
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("storeQualityRanking")));
     }
 
     private MvcResult createOrder(String username, String productType, String colorMode, int pageCount, int copies, String deliveryMode, String priority) throws Exception {
@@ -1193,6 +1238,13 @@ class PrintshopV2SystemTests {
                                 """.formatted(productType, colorMode, pageCount, copies, deliveryMode, priority)))
                 .andExpect(status().isOk())
                 .andReturn();
+    }
+
+    private String jsonEscape(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n");
     }
 
     private byte[] pdfBytes(PDRectangle... pageSizes) throws Exception {

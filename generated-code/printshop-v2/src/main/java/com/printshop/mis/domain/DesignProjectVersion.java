@@ -17,7 +17,7 @@ public class DesignProjectVersion {
     public Long projectId;
     public Integer versionNo;
     public String label;
-    @Column(length = 5000)
+    @Column(columnDefinition = "LONGTEXT")
     public String canvasJson;
     public String savedBy;
     public LocalDateTime createdAt;

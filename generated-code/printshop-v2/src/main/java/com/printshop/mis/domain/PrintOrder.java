@@ -23,6 +23,9 @@ public class PrintOrder {
     public String colorMode;
     public Integer pageCount;
     public Integer copies;
+    public String sizeName;
+    public String paperType;
+    public String craftType;
     public String dueAt;
     public String deliveryMode;
     public String priority;

@@ -41,6 +41,7 @@ public class DeliveryService {
     private final DeliveryQuoteRepository deliveryQuotes;
     private final DeliveryTrackingEventRepository trackingEvents;
     private final FeedbackService feedbackService;
+    private final DeliveryChannelAdapter deliveryChannelAdapter;
     private final AuditTrailService audit;
 
     public DeliveryService(
@@ -52,6 +53,7 @@ public class DeliveryService {
             DeliveryQuoteRepository deliveryQuotes,
             DeliveryTrackingEventRepository trackingEvents,
             FeedbackService feedbackService,
+            DeliveryChannelAdapter deliveryChannelAdapter,
             AuditTrailService audit
     ) {
         this.identityService = identityService;
@@ -62,6 +64,7 @@ public class DeliveryService {
         this.deliveryQuotes = deliveryQuotes;
         this.trackingEvents = trackingEvents;
         this.feedbackService = feedbackService;
+        this.deliveryChannelAdapter = deliveryChannelAdapter;
         this.audit = audit;
     }
 
@@ -72,16 +75,17 @@ public class DeliveryService {
         changeGuard.requireNoPendingChange(order, "配送报价");
         String channelCode = text(asString(payload.get("channelCode")), "IMMEDIATE").toUpperCase();
         BigDecimal weight = new BigDecimal(String.valueOf(payload.getOrDefault("packageWeightKg", "1"))).max(new BigDecimal("0.1"));
+        var channelQuote = deliveryChannelAdapter.quote(channelCode, weight.setScale(2, RoundingMode.HALF_UP));
         DeliveryQuote quote = new DeliveryQuote();
         quote.quoteNo = code("DLQ");
         quote.orderId = order.id;
-        quote.channelCode = channelCode;
-        quote.channelName = channelName(channelCode);
+        quote.channelCode = channelQuote.channelCode();
+        quote.channelName = channelQuote.channelName();
         quote.pickupAddress = text(asString(payload.get("pickupAddress")), text(order.storeName, "门店"));
         quote.deliveryAddress = text(asString(payload.get("deliveryAddress")), "客户收货地址");
         quote.packageWeightKg = weight.setScale(2, RoundingMode.HALF_UP);
-        quote.estimatedMinutes = "EXPRESS".equals(channelCode) ? 1440 : 60;
-        quote.estimatedFee = quoteFee(channelCode, quote.packageWeightKg);
+        quote.estimatedMinutes = channelQuote.estimatedMinutes();
+        quote.estimatedFee = channelQuote.fee();
         quote.status = "QUOTED";
         quote.createdAt = now();
         audit.record(username, "DLV", "CREATE_DELIVERY_QUOTE", "ORDER", order.id, quote.channelName + " " + quote.estimatedFee);
@@ -221,16 +225,11 @@ public class DeliveryService {
 
     public Map<String, Object> syncTracking(String username, Long id) {
         DeliveryTask task = getDeliveryTask(username, id);
-        String nextStatus = switch (text(task.externalStatus, "CREATED")) {
-            case "CREATED" -> "PICKED_UP";
-            case "PICKED_UP" -> "IN_TRANSIT";
-            case "IN_TRANSIT" -> "DELIVERED";
-            default -> "DELIVERED";
-        };
+        String nextStatus = deliveryChannelAdapter.nextStatus(text(task.externalStatus, "CREATED"));
         task.externalStatus = nextStatus;
         task.updatedAt = now();
         DeliveryTask saved = deliveryTasks.save(task);
-        addTracking(saved, nextStatus, "模拟配送节点", trackingMessage(nextStatus));
+        addTracking(saved, nextStatus, "模拟配送节点", deliveryChannelAdapter.trackingMessage(nextStatus));
         audit.record(username, "DLV", "SYNC_DELIVERY_TRACKING", "DELIVERY_TASK", id, nextStatus);
         return Map.of(
                 "task", saved,
@@ -280,20 +279,6 @@ public class DeliveryService {
         return trackingEvents.findByDeliveryTaskIdOrderByOccurredAtDesc(taskId);
     }
 
-    private BigDecimal quoteFee(String channelCode, BigDecimal weight) {
-        BigDecimal base = "EXPRESS".equals(channelCode) ? new BigDecimal("18.00") : new BigDecimal("12.00");
-        BigDecimal rate = "EXPRESS".equals(channelCode) ? new BigDecimal("4.50") : new BigDecimal("3.00");
-        return base.add(rate.multiply(weight)).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private String channelName(String channelCode) {
-        return switch (channelCode) {
-            case "EXPRESS" -> "快递配送";
-            case "IMMEDIATE" -> "即时配送";
-            default -> "即时配送";
-        };
-    }
-
     private void addTracking(DeliveryTask task, String status, String location, String message) {
         DeliveryTrackingEvent event = new DeliveryTrackingEvent();
         event.deliveryTaskId = task.id;
@@ -305,14 +290,6 @@ public class DeliveryService {
         trackingEvents.save(event);
     }
 
-    private String trackingMessage(String status) {
-        return switch (status) {
-            case "PICKED_UP" -> "骑手/快递员已取件。";
-            case "IN_TRANSIT" -> "包裹正在配送途中。";
-            case "DELIVERED" -> "第三方平台显示已送达，等待系统签收确认。";
-            default -> "配送状态已更新。";
-        };
-    }
 
     private boolean canBeAccepted(DeliveryTask task) {
         String carrier = text(task.carrierName, "");

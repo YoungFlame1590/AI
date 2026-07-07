@@ -21,4 +21,9 @@ public class ReportController {
     public ApiResponse<?> reports(Principal principal) {
         return api.ok(reportingService.reports(principal.getName()));
     }
+
+    @GetMapping("/api/reports/store-quality-ranking")
+    public ApiResponse<?> storeQualityRanking(Principal principal) {
+        return api.ok(reportingService.storeQualityRanking(principal.getName()));
+    }
 }

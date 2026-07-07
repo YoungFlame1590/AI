@@ -24,6 +24,11 @@ public class ReplenishmentController {
         return api.ok(replenishmentService.recommendations(principal.getName()));
     }
 
+    @GetMapping("/api/replenishment/forecast")
+    public ApiResponse<?> forecast(Principal principal) {
+        return api.ok(replenishmentService.forecastNextThirtyDays(principal.getName()));
+    }
+
     @PostMapping("/api/replenishment/recalculate")
     public ApiResponse<?> recalculate(Principal principal) {
         return api.ok(replenishmentService.recalculate(principal.getName()));

@@ -172,6 +172,9 @@ public class DesignService {
         request.colorMode = text(asString(payload.get("colorMode")), template.colorMode);
         request.pageCount = number(integer(payload.get("pageCount")), number(template.pageCount, 1));
         request.copies = number(integer(payload.get("copies")), number(template.defaultCopies, 1));
+        request.sizeName = text(template.sizeName, "未指定尺寸");
+        request.paperType = text(asString(payload.get("paperType")), "标准纸");
+        request.craftType = text(asString(payload.get("craftType")), "无特殊工艺");
         request.deliveryMode = text(asString(payload.get("deliveryMode")), "到店自提");
         request.priority = text(asString(payload.get("priority")), "普通");
         PrintOrder order = orderService.createOrder(username, request);

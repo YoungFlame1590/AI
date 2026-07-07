@@ -1,5 +1,7 @@
 package com.printshop.mis.order;
 
+import static com.printshop.mis.shared.MisSupport.text;
+
 import com.printshop.common.exception.BusinessException;
 import com.printshop.mis.delivery.DeliveryService;
 import com.printshop.mis.domain.DeliveryTask;
@@ -188,9 +190,9 @@ public class OrderWorkflowService {
         JobTicket request = new JobTicket();
         request.orderId = order.id;
         request.quotationId = quotation == null ? null : quotation.id;
-        request.specs = order.productType + " / " + order.colorMode + " / " + order.pageCount + "页 x " + order.copies + "份";
-        request.paperType = defaultPaper(order);
-        request.binding = defaultBinding(order);
+        request.specs = order.productType + " / " + order.colorMode + " / " + text(order.sizeName, "未指定尺寸") + " / " + order.pageCount + "页 x " + order.copies + "份 / " + text(order.craftType, "无特殊工艺");
+        request.paperType = text(order.paperType, defaultPaper(order));
+        request.binding = text(order.craftType, defaultBinding(order));
         return jobTicketService.createJobTicket(username, request);
     }
 

@@ -21,6 +21,7 @@ import com.printshop.mis.repository.SupplierProfileRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,12 @@ public class ReplenishmentService {
     public List<Map<String, Object>> recommendations(String username) {
         requireOps(username, false);
         return inventoryItems.findAll().stream().map(this::recommendationFor).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> forecastNextThirtyDays(String username) {
+        requireOps(username, false);
+        return inventoryItems.findAll().stream().map(this::forecastFor).toList();
     }
 
     public List<PurchaseSuggestion> recalculate(String username) {
@@ -118,6 +125,30 @@ public class ReplenishmentService {
         return result;
     }
 
+    private Map<String, Object> forecastFor(InventoryItem item) {
+        LocalDateTime now = LocalDateTime.now();
+        BigDecimal recent90 = consumptionBetween(item.sku, now.minusDays(90), now);
+        BigDecimal lastMonth = consumptionForMonth(item.sku, YearMonth.now().minusMonths(1));
+        BigDecimal sameMonthLastYear = consumptionForMonth(item.sku, YearMonth.now().minusYears(1));
+        BigDecimal trend = averageMonthlyGrowth(item.sku);
+        BigDecimal fallback = recent90.divide(new BigDecimal("90"), 4, RoundingMode.HALF_UP).multiply(new BigDecimal("30"));
+        BigDecimal base = lastMonth.compareTo(BigDecimal.ZERO) > 0 ? lastMonth : fallback;
+        if (sameMonthLastYear.compareTo(BigDecimal.ZERO) > 0 && lastMonth.compareTo(BigDecimal.ZERO) > 0) {
+            base = base.multiply(new BigDecimal("0.70")).add(sameMonthLastYear.multiply(new BigDecimal("0.30")));
+        }
+        BigDecimal forecast = base.multiply(BigDecimal.ONE.add(trend)).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sku", item.sku);
+        result.put("itemName", item.itemName);
+        result.put("lastMonthConsumption", lastMonth.setScale(2, RoundingMode.HALF_UP));
+        result.put("sameMonthLastYearConsumption", sameMonthLastYear.setScale(2, RoundingMode.HALF_UP));
+        result.put("recent90DailyAverage", recent90.divide(new BigDecimal("90"), 2, RoundingMode.HALF_UP));
+        result.put("averageMonthlyGrowthRate", trend.setScale(4, RoundingMode.HALF_UP));
+        result.put("forecastNext30Days", forecast);
+        result.put("reason", "按上月消耗、去年同期和近三个月环比趋势综合预测；历史不足时退化为近90天日均消耗x30。");
+        return result;
+    }
+
     private PurchaseSuggestion suggestionFor(InventoryItem item) {
         SupplierProfile supplier = supplierFor(item.sku);
         BigDecimal dynamicSafetyStock = dynamicSafetyStock(item, supplier);
@@ -149,6 +180,38 @@ public class ReplenishmentService {
         BigDecimal daily = total.divide(new BigDecimal("90"), 4, RoundingMode.HALF_UP);
         BigDecimal leadAndBuffer = BigDecimal.valueOf(supplier.leadTimeDays == null ? 3 : supplier.leadTimeDays).add(BUFFER_DAYS);
         return daily.multiply(leadAndBuffer).max(fallback).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal consumptionForMonth(String sku, YearMonth month) {
+        return consumptionBetween(sku, month.atDay(1).atStartOfDay(), month.plusMonths(1).atDay(1).atStartOfDay());
+    }
+
+    private BigDecimal consumptionBetween(String sku, LocalDateTime start, LocalDateTime end) {
+        return consumptions.findBySkuAndConsumedAtAfter(sku, start).stream()
+                .filter(entry -> entry.consumedAt != null && entry.consumedAt.isBefore(end))
+                .map(entry -> entry.quantity == null ? BigDecimal.ZERO : entry.quantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal averageMonthlyGrowth(String sku) {
+        YearMonth current = YearMonth.now();
+        BigDecimal month3 = consumptionForMonth(sku, current.minusMonths(3));
+        BigDecimal month2 = consumptionForMonth(sku, current.minusMonths(2));
+        BigDecimal month1 = consumptionForMonth(sku, current.minusMonths(1));
+        java.util.List<BigDecimal> growth = new java.util.ArrayList<>();
+        if (month3.compareTo(BigDecimal.ZERO) > 0) {
+            growth.add(month2.subtract(month3).divide(month3, 4, RoundingMode.HALF_UP));
+        }
+        if (month2.compareTo(BigDecimal.ZERO) > 0) {
+            growth.add(month1.subtract(month2).divide(month2, 4, RoundingMode.HALF_UP));
+        }
+        if (growth.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return growth.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(growth.size()), 4, RoundingMode.HALF_UP)
+                .max(new BigDecimal("-0.50"))
+                .min(new BigDecimal("1.00"));
     }
 
     private BigDecimal recommendedQuantity(InventoryItem item, SupplierProfile supplier, BigDecimal dynamicSafetyStock) {

@@ -93,6 +93,9 @@ public class OrderService {
         order.pageCount = number(request.pageCount, 1);
         order.copies = number(request.copies, 1);
         pricing.validateOrderNumbers(order.pageCount, order.copies);
+        order.sizeName = text(request.sizeName, "未指定尺寸");
+        order.paperType = text(request.paperType, "标准纸");
+        order.craftType = text(request.craftType, "无特殊工艺");
         order.dueAt = text(request.dueAt, DISPLAY_TIME.format(timestamp));
         order.deliveryMode = pricing.normalizeOption(text(request.deliveryMode, "到店自提"), OrderPricingPolicy.DELIVERY_MODES, "交付方式");
         order.priority = pricing.normalizeOption(text(request.priority, "普通"), OrderPricingPolicy.PRIORITIES, "优先级");
@@ -325,6 +328,15 @@ public class OrderService {
             pricing.validateOrderNumbers(request.pageCount == null ? order.pageCount : request.pageCount, request.copies);
             order.copies = request.copies;
         }
+        if (allowed.contains("sizeName") && request.sizeName != null) {
+            order.sizeName = text(request.sizeName, order.sizeName);
+        }
+        if (allowed.contains("paperType") && request.paperType != null) {
+            order.paperType = text(request.paperType, order.paperType);
+        }
+        if (allowed.contains("craftType") && request.craftType != null) {
+            order.craftType = text(request.craftType, order.craftType);
+        }
         if (allowed.contains("dueAt") && request.dueAt != null) {
             order.dueAt = text(request.dueAt, order.dueAt);
         }
@@ -365,6 +377,9 @@ public class OrderService {
         assertForbiddenIfMissing(allowed, "colorMode", request.colorMode, "颜色/工艺");
         assertForbiddenIfMissing(allowed, "pageCount", request.pageCount, "页数");
         assertForbiddenIfMissing(allowed, "copies", request.copies, "份数");
+        assertForbiddenIfMissing(allowed, "sizeName", request.sizeName, "尺寸");
+        assertForbiddenIfMissing(allowed, "paperType", request.paperType, "纸张");
+        assertForbiddenIfMissing(allowed, "craftType", request.craftType, "工艺");
         assertForbiddenIfMissing(allowed, "deliveryMode", request.deliveryMode, "交付方式");
         assertForbiddenIfMissing(allowed, "priority", request.priority, "优先级");
     }

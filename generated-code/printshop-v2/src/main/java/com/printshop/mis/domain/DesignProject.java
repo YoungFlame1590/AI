@@ -22,7 +22,7 @@ public class DesignProject {
     public String title;
     public String status;
     public Integer currentVersionNo = 1;
-    @Column(length = 5000)
+    @Column(columnDefinition = "LONGTEXT")
     public String canvasJson;
     public Long submittedOrderId;
     public LocalDateTime createdAt;

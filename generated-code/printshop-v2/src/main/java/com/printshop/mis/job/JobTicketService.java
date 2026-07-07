@@ -42,9 +42,9 @@ public class JobTicketService {
         ticket.ticketNo = text(request.ticketNo, code("JOB"));
         ticket.orderId = order.id;
         ticket.quotationId = request.quotationId;
-        ticket.specs = text(request.specs, order.productType + " / " + order.colorMode);
-        ticket.paperType = text(request.paperType, "A4 80g");
-        ticket.binding = text(request.binding, "普通装订");
+        ticket.specs = text(request.specs, order.productType + " / " + order.colorMode + " / " + text(order.sizeName, "未指定尺寸") + " / " + text(order.craftType, "无特殊工艺"));
+        ticket.paperType = text(request.paperType, text(order.paperType, "A4 80g"));
+        ticket.binding = text(request.binding, text(order.craftType, "普通装订"));
         ticket.status = "READY";
         ticket.createdAt = now();
         order.status = "JOB_READY";

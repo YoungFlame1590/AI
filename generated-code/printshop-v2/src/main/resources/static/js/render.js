@@ -1,5 +1,6 @@
 import { actionRoles, dashboardOrderColumns, modules, roleModules } from "./config.js";
 import { showError } from "./api.js";
+import { mountDesignEditor } from "./design-editor.js";
 import { isFieldDisabled, normalizeOptionValue, updateOrderAmountPreview } from "./orders.js";
 import { el, state } from "./state.js";
 
@@ -76,7 +77,9 @@ export function renderTable(customColumns, customTitle) {
 }
 
 export function renderForm(handlers) {
-  document.querySelector(".workspace")?.classList.toggle("reports-workspace", state.module === "reports");
+  const workspace = document.querySelector(".workspace");
+  workspace?.classList.toggle("reports-workspace", state.module === "reports");
+  workspace?.classList.toggle("design-workspace", state.module === "designProjects");
   if (state.module === "orders" && state.creatingOrderFromFile) {
     renderInitialOrderUpload(handlers);
     return;
@@ -165,57 +168,17 @@ function renderDesignProjectDetail(record = {}, handlers) {
     el.recordForm.innerHTML = "<p class=\"empty wide\">请先从模板市场创建一个设计项目。</p>";
     return;
   }
+  const detail = state.designProjectDetail?.project?.id === record.id ? state.designProjectDetail : { project: record, template: null, versions: [] };
   el.detailTitle.textContent = `在线设计 · ${record.title || record.projectNo}`;
-  const canvasJson = record.canvasJson || "{}";
-  el.recordForm.innerHTML = `
-    <section class="design-editor wide">
-      <div class="design-toolbar">
-        <div><span>项目</span><strong>${formatCell(record.projectNo)} · V${formatCell(record.currentVersionNo)}</strong></div>
-        <div><span>状态</span><strong>${formatCell(record.status, "status")}</strong></div>
-        <div><span>订单</span><strong>${formatCell(record.submittedOrderId)}</strong></div>
-      </div>
-      <canvas id="designCanvas" width="480" height="300" aria-label="在线设计画布预览"></canvas>
-      <label class="wide">
-        画布JSON
-        <textarea name="canvasJson">${escapeHtml(canvasJson)}</textarea>
-      </label>
-    </section>
-  `;
+  el.recordForm.innerHTML = "";
+  const mount = document.createElement("div");
+  mount.className = "wide";
+  el.recordForm.appendChild(mount);
   el.recordActions.innerHTML = "";
-  const config = activeRecordConfig();
-  renderReadonlyActions(config, handlers);
-  drawDesignCanvas(canvasJson);
-}
-
-function drawDesignCanvas(canvasJson) {
-  const canvas = document.getElementById("designCanvas");
-  if (!canvas) return;
-  const context = canvas.getContext("2d");
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.strokeStyle = "#c5d1dc";
-  context.lineWidth = 2;
-  context.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
-  let objects = [];
-  try {
-    objects = JSON.parse(canvasJson || "{}").objects || [];
-  } catch {
-    objects = [{ type: "text", text: "画布JSON格式待修正", x: 80, y: 140 }];
-  }
-  objects.forEach((item, index) => {
-    const x = Number(item.x || 60 + index * 20);
-    const y = Number(item.y || 60 + index * 38);
-    context.fillStyle = item.type === "qr" ? "#174f49" : item.type === "image" ? "#2f6cbd" : "#17212b";
-    if (["qr", "logo", "image"].includes(item.type)) {
-      context.strokeStyle = context.fillStyle;
-      context.strokeRect(x, y, item.type === "image" ? 150 : 74, item.type === "image" ? 90 : 74);
-      context.font = "13px Microsoft YaHei, Arial";
-      context.fillText(item.text || item.type, x + 8, y + 38);
-      return;
-    }
-    context.font = index === 0 ? "22px Microsoft YaHei, Arial" : "16px Microsoft YaHei, Arial";
-    context.fillText(item.text || "文本", x, y);
+  mountDesignEditor(mount, detail.project, detail.template, detail.versions || [], {
+    onSaveVersion: handlers.saveDesignVersion,
+    onRestoreVersion: handlers.restoreDesignVersion,
+    onSubmitOrder: handlers.submitDesignOrder,
   });
 }
 
@@ -332,6 +295,7 @@ function renderReportDetail(report = {}) {
   const lowStock = Array.isArray(report.lowStock) ? report.lowStock : [];
   const productionLoad = Array.isArray(report.productionLoad) ? report.productionLoad : [];
   const purchaseSuggestions = Array.isArray(report.purchaseSuggestions) ? report.purchaseSuggestions : [];
+  const storeQualityRanking = Array.isArray(report.storeQualityRanking) ? report.storeQualityRanking : [];
   const financeSummary = [
     ["收款金额", finance.paidAmount ?? 0, "paidAmount"],
     ["退款金额", finance.refundAmount ?? 0, "refundAmount"],
@@ -366,6 +330,7 @@ function renderReportDetail(report = {}) {
         ${reportArrayTable("生产负载", productionLoad, ["taskNo", "station", "operatorName", "status", "progressPercent"])}
         ${reportArrayTable("低库存预警", lowStock, ["sku", "itemName", "category", "quantity", "safetyStock"])}
         ${reportObjectTable("服务质量", serviceQuality.storeRatings || {}, ["门店", "评分"])}
+        ${reportArrayTable("门店服务排行", storeQualityRanking, ["storeName", "reviewCount", "averageRating", "negativeRate", "averageComplaintHours", "overdueOpenCount"])}
         ${reportArrayTable("采购建议", purchaseSuggestions, ["suggestionNo", "sku", "recommendedQuantity", "estimatedCost", "status"])}
       </div>
     </section>
@@ -720,6 +685,7 @@ function labelForColumn(column, config = null) {
     dynamicSafetyStock: "动态安全库存",
     estimatedCost: "预计成本",
     estimatedFee: "预估费用",
+    forecastNext30Days: "未来30天预测",
     externalStatus: "外部状态",
     contentType: "文件类型",
     fileName: "文件名",
@@ -753,6 +719,9 @@ function labelForColumn(column, config = null) {
     reviewStatus: "审核状态",
     recommendedQuantity: "建议数量",
     suggestionNo: "采购建议号",
+    averageComplaintHours: "平均处理小时",
+    negativeRate: "差评率",
+    overdueOpenCount: "超时未处理",
     trackingNo: "运单号",
   };
   return labels[column] || column;

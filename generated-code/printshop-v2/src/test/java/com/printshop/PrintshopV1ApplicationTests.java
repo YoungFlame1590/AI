@@ -56,6 +56,14 @@ class PrintshopV1ApplicationTests {
         mockMvc.perform(get("/js/config.js"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("orderOptions")));
+
+        mockMvc.perform(get("/vendor/fabric.min.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("fabric")));
+
+        mockMvc.perform(get("/vendor/qrcode.min.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("QRCode")));
     }
 
     @Test

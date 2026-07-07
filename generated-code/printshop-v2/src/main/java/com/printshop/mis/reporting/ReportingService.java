@@ -4,6 +4,7 @@ import com.printshop.mis.domain.InventoryItem;
 import com.printshop.mis.domain.PaymentRecord;
 import com.printshop.mis.domain.PrintOrder;
 import com.printshop.mis.domain.ServiceReview;
+import com.printshop.mis.domain.ComplaintTicket;
 import com.printshop.mis.identity.IdentityService;
 import com.printshop.mis.order.OrderService;
 import com.printshop.mis.repository.ComplaintTicketRepository;
@@ -16,7 +17,10 @@ import com.printshop.mis.repository.ProductionTaskRepository;
 import com.printshop.mis.repository.PurchaseSuggestionRepository;
 import com.printshop.mis.repository.ServiceReviewRepository;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -117,7 +121,35 @@ public class ReportingService {
                                 Collectors.collectingAndThen(Collectors.toList(), this::ratingStats)))
         ));
         result.put("purchaseSuggestions", purchaseSuggestions.findAllByOrderByCreatedAtDesc().stream().limit(10).toList());
+        result.put("storeQualityRanking", storeQualityRanking(username));
         return result;
+    }
+
+    public List<Map<String, Object>> storeQualityRanking(String username) {
+        var visibleOrders = orderService.visibleOrders(identityService.requireUser(username));
+        var visibleOrderIds = visibleOrders.stream().map(order -> order.id).collect(java.util.stream.Collectors.toSet());
+        LocalDateTime since = LocalDateTime.now().minusDays(90);
+        var visibleReviews = serviceReviews.findAll().stream()
+                .filter(review -> visibleOrderIds.contains(review.orderId))
+                .filter(review -> review.createdAt == null || !review.createdAt.isBefore(since))
+                .toList();
+        var visibleComplaints = complaintTickets.findAll().stream()
+                .filter(ticket -> visibleOrderIds.contains(ticket.orderId))
+                .toList();
+        return visibleReviews.stream()
+                .collect(Collectors.groupingBy(review -> review.storeId == null ? -1L : review.storeId,
+                        LinkedHashMap::new,
+                        Collectors.toList()))
+                .entrySet().stream()
+                .map(entry -> qualityRow(entry.getKey(), visibleOrders, entry.getValue(), visibleComplaints))
+                .sorted((left, right) -> {
+                    int ratingCompare = ((BigDecimal) right.get("averageRating")).compareTo((BigDecimal) left.get("averageRating"));
+                    if (ratingCompare != 0) {
+                        return ratingCompare;
+                    }
+                    return ((BigDecimal) left.get("negativeRate")).compareTo((BigDecimal) right.get("negativeRate"));
+                })
+                .toList();
     }
 
     private Map<String, Long> orderFunnel(java.util.List<PrintOrder> allOrders) {
@@ -169,6 +201,45 @@ public class ReportingService {
                         reviews.stream().filter(review -> review.overallRating != null && review.overallRating <= 2).count()
                 ).divide(BigDecimal.valueOf(reviews.size()), 2, java.math.RoundingMode.HALF_UP)
         );
+    }
+
+    private Map<String, Object> qualityRow(Long storeId, java.util.List<PrintOrder> orders, java.util.List<ServiceReview> reviews, java.util.List<ComplaintTicket> complaints) {
+        var storeComplaints = complaints.stream()
+                .filter(ticket -> java.util.Objects.equals(ticket.storeId == null ? -1L : ticket.storeId, storeId))
+                .toList();
+        long negativeCount = reviews.stream().filter(review -> review.overallRating != null && review.overallRating <= 2).count();
+        BigDecimal negativeRate = reviews.isEmpty()
+                ? BigDecimal.ZERO.setScale(2)
+                : BigDecimal.valueOf(negativeCount).divide(BigDecimal.valueOf(reviews.size()), 4, java.math.RoundingMode.HALF_UP);
+        BigDecimal averageHours = averageComplaintHours(storeComplaints);
+        long overdueOpenCount = storeComplaints.stream()
+                .filter(ticket -> !"CLOSED".equals(ticket.status))
+                .filter(ticket -> ticket.createdAt != null && Duration.between(ticket.createdAt, LocalDateTime.now()).toHours() > 24)
+                .count();
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("storeId", storeId.equals(-1L) ? null : storeId);
+        row.put("storeName", storeNameFor(orders, storeId.equals(-1L) ? null : storeId));
+        row.put("reviewCount", reviews.size());
+        row.put("averageRating", averageRating(reviews));
+        row.put("negativeRate", negativeRate.setScale(4, java.math.RoundingMode.HALF_UP));
+        row.put("complaintCount", storeComplaints.size());
+        row.put("averageComplaintHours", averageHours);
+        row.put("overdueOpenCount", overdueOpenCount);
+        return row;
+    }
+
+    private BigDecimal averageComplaintHours(java.util.List<ComplaintTicket> tickets) {
+        var processed = tickets.stream()
+                .filter(ticket -> ticket.createdAt != null && (ticket.closedAt != null || ticket.repliedAt != null))
+                .toList();
+        if (processed.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        BigDecimal hours = processed.stream()
+                .map(ticket -> BigDecimal.valueOf(Duration.between(ticket.createdAt, ticket.closedAt == null ? ticket.repliedAt : ticket.closedAt).toMinutes())
+                        .divide(new BigDecimal("60"), 2, java.math.RoundingMode.HALF_UP))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return hours.divide(BigDecimal.valueOf(processed.size()), 2, java.math.RoundingMode.HALF_UP);
     }
 
     private String storeNameFor(java.util.List<PrintOrder> orders, Long storeId) {

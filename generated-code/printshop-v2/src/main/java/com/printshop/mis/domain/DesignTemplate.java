@@ -24,7 +24,7 @@ public class DesignTemplate {
     public String sizeName;
     public String priceType;
     public Boolean published = true;
-    @Column(length = 5000)
+    @Column(columnDefinition = "LONGTEXT")
     public String canvasJson;
     public String createdBy;
     public LocalDateTime createdAt;

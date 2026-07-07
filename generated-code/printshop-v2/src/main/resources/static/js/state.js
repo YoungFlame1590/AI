@@ -7,6 +7,7 @@ export const state = {
   selectedTask: null,
   workbench: null,
   aggregate: null,
+  designProjectDetail: null,
   editing: false,
   creatingOrderFromFile: false,
 };
