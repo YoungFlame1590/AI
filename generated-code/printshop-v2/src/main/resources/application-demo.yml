@@ -5,6 +5,7 @@ spring:
     username: sa
     password:
   flyway:
+    locations: classpath:db/migration,classpath:db/demo-migration
     clean-disabled: false
     clean-on-validation-error: true
   jpa:

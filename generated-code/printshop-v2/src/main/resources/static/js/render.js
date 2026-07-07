@@ -10,9 +10,11 @@ export function toggleAuth() {
   el.appView.classList.toggle("hidden", !loggedIn);
   if (loggedIn) {
     el.currentUser.textContent = `${state.user.displayName} · ${state.user.role} · ${state.user.storeName}`;
+    el.demoTestBtn.hidden = state.user.role !== "ADMIN";
     el.clearDataBtn.hidden = state.user.role !== "ADMIN";
     renderNavAccess();
   } else {
+    el.demoTestBtn.hidden = true;
     el.clearDataBtn.hidden = true;
   }
 }

@@ -22,6 +22,7 @@ export const el = {
   authMessage: document.querySelector("#authMessage"),
   registerModeBtn: document.querySelector("#registerModeBtn"),
   currentUser: document.querySelector("#currentUser"),
+  demoTestBtn: document.querySelector("#demoTestBtn"),
   clearDataBtn: document.querySelector("#clearDataBtn"),
   logoutBtn: document.querySelector("#logoutBtn"),
   pageTitle: document.querySelector("#pageTitle"),

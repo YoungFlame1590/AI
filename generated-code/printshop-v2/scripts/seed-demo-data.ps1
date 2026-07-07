@@ -17,6 +17,11 @@ $colorModes = @("黑白", "彩色", "黑白加彩页", "覆膜", "装订加覆�
 $deliveryModes = @("到店自提", "同城配送", "跨店配送", "外协配送")
 $priorities = @("普通", "加急", "特急")
 $stages = @("SUBMITTED", "REVIEWING", "QUOTED", "JOB_READY", "IN_PRODUCTION", "PRODUCTION_DONE", "DELIVERING", "DONE")
+$storeProfiles = @(
+    @{ Key = "A"; StoreName = "大学城店"; Customer = "customer"; Clerk = "clerk"; Manager = "manager" },
+    @{ Key = "B"; StoreName = "市中心店"; Customer = "customer_b"; Clerk = "clerk_b"; Manager = "manager_b" },
+    @{ Key = "C"; StoreName = "西区店"; Customer = "customer_c"; Clerk = "clerk_c"; Manager = "manager_c" }
+)
 
 function AuthHeader([string]$Username) {
     $pair = "$Username`:demo123"
@@ -40,17 +45,43 @@ function Invoke-Api([string]$Method, [string]$Path, [string]$Username, $Body = $
     return $response.data
 }
 
-function Step-OrderToStage($OrderId, [string]$Stage) {
+function Invoke-FileUpload([string]$Path, [string]$Username, [string]$FilePath) {
+    $response = Invoke-RestMethod -Uri "$BaseUrl$Path" -Method Post -Headers (AuthHeader $Username) -Form @{
+        file = Get-Item $FilePath
+    }
+    if ($null -ne $response.success -and -not $response.success) {
+        throw "API failed: POST $Path - $($response.message)"
+    }
+    return $response.data
+}
+
+function Ensure-DemoUploadFile {
+    $dir = Join-Path (Get-Location) "target"
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir | Out-Null
+    }
+    $file = Join-Path $dir "seed-demo-order-file.pdf"
+    if (-not (Test-Path $file)) {
+        [System.IO.File]::WriteAllBytes($file, [Text.Encoding]::UTF8.GetBytes("%PDF-1.4`n% seed demo placeholder`n"))
+    }
+    return $file
+}
+
+function Get-StoreProfile([int]$Index) {
+    return $storeProfiles[$Index % $storeProfiles.Count]
+}
+
+function Step-OrderToStage($OrderId, [string]$Stage, $Profile) {
     if ($Stage -eq "SUBMITTED") { return }
 
-    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/SUBMIT_REVIEW" "customer" @{} | Out-Null
+    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/SUBMIT_REVIEW" $Profile.Customer @{} | Out-Null
     if ($Stage -eq "REVIEWING") { return }
 
-    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/QUOTE" "clerk" @{} | Out-Null
+    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/QUOTE" $Profile.Clerk @{} | Out-Null
     if ($Stage -eq "QUOTED") { return }
 
-    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/CONFIRM_QUOTE" "customer" @{} | Out-Null
-    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/JOB_TICKET" "clerk" @{} | Out-Null
+    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/CONFIRM_QUOTE" $Profile.Customer @{} | Out-Null
+    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/JOB_TICKET" $Profile.Clerk @{} | Out-Null
     if ($Stage -eq "JOB_READY") { return }
 
     Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/SCHEDULE_PRODUCTION" "ops" @{} | Out-Null
@@ -63,10 +94,10 @@ function Step-OrderToStage($OrderId, [string]$Stage) {
     if ($Stage -eq "DELIVERING") { return }
 
     Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/ACCEPT_DELIVERY" "courier" @{} | Out-Null
-    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/SIGN_DELIVERY" "courier" @{ signedBy = "批量测试客户" } | Out-Null
+    Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/SIGN_DELIVERY" "courier" @{ signedBy = "$($Profile.StoreName)批量测试客户" } | Out-Null
 }
 
-function Add-FinanceData($OrderId, [string]$Stage, [int]$Index) {
+function Add-FinanceData($OrderId, [string]$Stage, [int]$Index, $Profile) {
     if (-not $IncludeFinance) { return }
     if (@("SUBMITTED", "REVIEWING", "QUOTED") -contains $Stage) { return }
 
@@ -75,7 +106,7 @@ function Add-FinanceData($OrderId, [string]$Stage, [int]$Index) {
     }
     if ($Index % 5 -eq 0) {
         try {
-            Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/INVOICE" "customer" @{} | Out-Null
+            Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/INVOICE" $Profile.Customer @{} | Out-Null
             Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/INVOICE" "finance" @{} | Out-Null
         } catch {
             Write-Warning "Invoice skipped for order ${OrderId}: $($_.Exception.Message)"
@@ -83,11 +114,56 @@ function Add-FinanceData($OrderId, [string]$Stage, [int]$Index) {
     }
     if ($Index % 17 -eq 0) {
         try {
-            Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/REFUND" "customer" @{} | Out-Null
+            Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/REFUND" $Profile.Customer @{} | Out-Null
             Invoke-Api "POST" "/api/orders/$OrderId/workflow/actions/REFUND" "finance" @{} | Out-Null
         } catch {
             Write-Warning "Refund skipped for order ${OrderId}: $($_.Exception.Message)"
         }
+    }
+}
+
+function Review-Payload([int]$Index, $Profile) {
+    if ($Profile.Key -eq "B") {
+        return @{
+            printQualityRating = 5
+            timelinessRating = 5
+            staffRating = 5
+            valueRating = 4 + ($Index % 2)
+            comment = "市中心店响应快，交付稳定，适合作为高分演示样本。"
+        }
+    }
+    if ($Profile.Key -eq "C") {
+        if (($Index % 5) -eq 3 -or ($Index % 5) -eq 0) {
+            return @{
+                printQualityRating = 2
+                timelinessRating = 1
+                staffRating = 2
+                valueRating = 2
+                comment = "交付等待时间偏长，沟通需要改进。"
+            }
+        }
+        return @{
+            printQualityRating = 3
+            timelinessRating = 3
+            staffRating = 3
+            valueRating = 3
+            comment = "西区店本次完成交付，但体验一般。"
+        }
+    }
+    return @{
+        printQualityRating = 4
+        timelinessRating = 4
+        staffRating = 4
+        valueRating = 3 + ($Index % 2)
+        comment = "大学城店整体稳定，作为中等偏上对照组。"
+    }
+}
+
+function Submit-Review($OrderId, [int]$Index, $Profile) {
+    try {
+        Invoke-Api "POST" "/api/orders/$OrderId/service-reviews" $Profile.Customer (Review-Payload $Index $Profile) | Out-Null
+    } catch {
+        Write-Warning "Review skipped for order ${OrderId}: $($_.Exception.Message)"
     }
 }
 
@@ -122,18 +198,24 @@ if ($TopUpInventory) {
 $summary = [ordered]@{}
 $created = New-Object System.Collections.Generic.List[object]
 $startedAt = Get-Date
+$demoUploadFile = Ensure-DemoUploadFile
 
 for ($i = 0; $i -lt $Orders; $i++) {
     $targetStage = $stages[$i % $stages.Count]
-    $order = Invoke-Api "POST" "/api/orders" "customer" (New-OrderPayload $i)
-    Step-OrderToStage $order.id $targetStage
-    Add-FinanceData $order.id $targetStage $i
+    $profile = Get-StoreProfile $i
+    $order = Invoke-Api "POST" "/api/orders" $profile.Customer (New-OrderPayload $i)
+    Invoke-FileUpload "/api/orders/$($order.id)/files" $profile.Customer $demoUploadFile | Out-Null
+    Step-OrderToStage $order.id $targetStage $profile
+    if ($targetStage -eq "DONE") {
+        Submit-Review $order.id $i $profile
+    }
+    Add-FinanceData $order.id $targetStage $i $profile
 
     if (-not $summary.Contains($targetStage)) {
         $summary[$targetStage] = 0
     }
     $summary[$targetStage]++
-    $created.Add([pscustomobject]@{ orderId = $order.id; orderNo = $order.orderNo; targetStage = $targetStage }) | Out-Null
+    $created.Add([pscustomobject]@{ orderId = $order.id; orderNo = $order.orderNo; targetStage = $targetStage; store = $profile.StoreName }) | Out-Null
 
     if (($i + 1) % 10 -eq 0 -or ($i + 1) -eq $Orders) {
         Write-Host ("[seed] {0}/{1} orders created" -f ($i + 1), $Orders)

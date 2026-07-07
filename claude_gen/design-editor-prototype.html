@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>所见即所得设计编辑器 · 原型</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg-app:#EEF0F4;
+    --bg-panel:#FFFFFF;
+    --ink:#20232B;
+    --ink-soft:#6B7280;
+    --line:#E2E5EA;
+    --accent:#3D5AFE;
+    --accent-soft:#EEF1FF;
+    --danger:#E5484D;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg-app);
+    color:var(--ink);
+    height:100vh;
+    overflow:hidden;
+  }
+  .app{
+    display:grid;
+    grid-template-rows:56px 1fr;
+    height:100vh;
+  }
+  /* ---------- 顶部栏 ---------- */
+  .topbar{
+    background:var(--bg-panel);
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    padding:0 20px;
+    gap:16px;
+  }
+  .topbar .brand{
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.5px;
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+  .topbar select{
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:6px 10px;
+    font-size:13px;
+    color:var(--ink);
+    background:#fff;
+  }
+  .topbar .dims{
+    font-size:12px;
+    color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+  }
+  .spacer{flex:1;}
+  .btn{
+    border:none;
+    border-radius:6px;
+    padding:8px 14px;
+    font-size:13px;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    transition:background .15s ease, transform .05s ease;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:#3049d6;}
+  .btn-ghost{background:var(--accent-soft);color:var(--accent);}
+  .btn-ghost:hover{background:#E1E6FF;}
+
+  /* ---------- 主体三栏 ---------- */
+  .workspace{
+    display:grid;
+    grid-template-columns:220px 1fr 260px;
+    min-height:0;
+  }
+  .sidebar{
+    background:var(--bg-panel);
+    border-right:1px solid var(--line);
+    padding:16px 14px;
+    overflow-y:auto;
+  }
+  .sidebar h4{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--ink-soft);
+    margin:0 0 10px;
+  }
+  .tool-btn{
+    width:100%;
+    text-align:left;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+    margin-bottom:8px;
+    font-size:13px;
+    color:var(--ink);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .tool-btn:hover{border-color:var(--accent);background:var(--accent-soft);}
+  .tool-btn .ic{
+    width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent-soft);
+    border-radius:6px;
+    font-size:13px;
+    color:var(--accent);
+    flex-shrink:0;
+  }
+  .canvas-area{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:auto;
+    padding:24px;
+    position:relative;
+  }
+  .canvas-shell{
+    position:relative;
+    background:#fff;
+    box-shadow:0 4px 24px rgba(20,24,40,0.10), 0 0 0 1px var(--line);
+  }
+  /* 出血/安全区示意线——印刷场景的标志性细节 */
+  .bleed-guide{
+    position:absolute;
+    pointer-events:none;
+    border:1px dashed #C7CCD6;
+  }
+  .panel{
+    background:var(--bg-panel);
+    border-left:1px solid var(--line);
+    padding:16px 14px;
+    overflow-y:auto;
+  }
+  .panel h4{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--ink-soft);
+    margin:0 0 10px;
+  }
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .field input[type=range]{width:100%;}
+  .field input[type=color]{
+    width:100%;height:32px;border:1px solid var(--line);border-radius:6px;padding:2px;
+  }
+  .row{display:flex;gap:8px;}
+  .row .btn-ghost, .row .btn-mini{flex:1;}
+  .btn-mini{
+    border:1px solid var(--line);
+    background:#fff;
+    border-radius:6px;
+    padding:7px 8px;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .btn-mini:hover{border-color:var(--accent);color:var(--accent);}
+  .empty-hint{
+    font-size:12px;
+    color:var(--ink-soft);
+    line-height:1.6;
+    background:var(--bg-app);
+    border-radius:8px;
+    padding:12px;
+  }
+  .versions{
+    margin-top:18px;
+    border-top:1px solid var(--line);
+    padding-top:14px;
+  }
+  .version-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 4px;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .version-item:hover{background:var(--accent-soft);color:var(--ink);}
+  .version-item .thumb{
+    width:28px;height:20px;border:1px solid var(--line);border-radius:3px;
+    background-size:cover;background-position:center;flex-shrink:0;
+  }
+  input[type=file]{display:none;}
+  .qr-modal-mask{
+    position:fixed;inset:0;background:rgba(20,24,40,0.35);
+    display:none;align-items:center;justify-content:center;z-index:50;
+  }
+  .qr-modal{
+    background:#fff;border-radius:10px;padding:20px;width:320px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.2);
+  }
+  .qr-modal h3{margin:0 0 12px;font-size:14px;}
+  .qr-modal input{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;margin-bottom:14px;
+  }
+  .qr-modal .row{justify-content:flex-end;}
+  #qr-hidden{position:absolute;left:-9999px;top:-9999px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>设计编辑器 · 原型</div>
+    <select id="templateSelect">
+      <option value="card">名片 90×54mm</option>
+      <option value="flyer">宣传单 A5</option>
+      <option value="poster">海报 A3</option>
+      <option value="rollup">易拉展架 800×2000mm</option>
+      <option value="brochure">三折页 210×99mm(单页)</option>
+      <option value="cover">画册封面 210×285mm</option>
+    </select>
+    <span class="dims" id="dimsLabel"></span>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" id="saveVersionBtn">保存版本</button>
+    <button class="btn btn-primary" id="orderBtn">一键下单 →</button>
+  </div>
+
+  <div class="workspace">
+
+    <div class="sidebar">
+      <h4>添加元素</h4>
+      <button class="tool-btn" id="addTextBtn"><span class="ic">T</span>添加文字</button>
+      <button class="tool-btn" id="uploadImageBtn"><span class="ic">▨</span>上传/替换图片</button>
+      <button class="tool-btn" id="addLogoBtn"><span class="ic">◆</span>添加 Logo</button>
+      <button class="tool-btn" id="addQrBtn"><span class="ic">▦</span>生成二维码</button>
+      <input type="file" id="imageInput" accept="image/*">
+      <input type="file" id="logoInput" accept="image/*">
+
+      <h4 style="margin-top:22px;">图层</h4>
+      <div class="row">
+        <button class="btn-mini" id="bringForwardBtn">上移一层</button>
+        <button class="btn-mini" id="sendBackwardBtn">下移一层</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn-mini" id="deleteObjBtn" style="color:var(--danger);">删除所选</button>
+      </div>
+    </div>
+
+    <div class="canvas-area">
+      <div class="canvas-shell" id="canvasShell">
+        <canvas id="mainCanvas"></canvas>
+        <div class="bleed-guide" id="bleedGuide"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="propPanel">
+      <h4>属性</h4>
+      <div id="propEmpty" class="empty-hint">在画布中选择一个元素，即可在这里编辑它的文字、颜色和大小。</div>
+      <div id="propText" style="display:none;">
+        <div class="field">
+          <label>字号</label>
+          <input type="range" id="fontSizeRange" min="10" max="120" value="28">
+        </div>
+        <div class="field">
+          <label>颜色</label>
+          <input type="color" id="fontColorInput" value="#20232B">
+        </div>
+        <div class="field row">
+          <button class="btn-mini" id="boldBtn"><b>B</b> 加粗</button>
+          <button class="btn-mini" id="alignBtn">切换对齐</button>
+        </div>
+      </div>
+      <div id="propImage" style="display:none;">
+        <div class="field">
+          <label>不透明度</label>
+          <input type="range" id="opacityRange" min="0" max="100" value="100">
+        </div>
+        <div class="field">
+          <button class="btn-mini" id="replaceImageBtn" style="width:100%;">替换这张图片</button>
+        </div>
+      </div>
+
+      <div class="versions">
+        <h4>历史版本（示意）</h4>
+        <div id="versionList"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="qr-modal-mask" id="qrModalMask">
+  <div class="qr-modal">
+    <h3>生成二维码</h3>
+    <input type="text" id="qrTextInput" placeholder="输入链接或文字内容，例如 https://...">
+    <div class="row">
+      <button class="btn-mini" id="qrCancelBtn">取消</button>
+      <button class="btn btn-primary" id="qrConfirmBtn">生成并插入</button>
+    </div>
+  </div>
+</div>
+<div id="qr-hidden"></div>
+
+<script>
+/* =========================================================
+   模板尺寸定义（单位 mm），用 px-per-mm 换算成画布像素
+   真实项目中，这份映射应来自"模板市场"选择的模板元数据
+   ========================================================= */
+const PX_PER_MM = 3.2;
+const TEMPLATES = {
+  card:      { w: 90,  h: 54,  bleed: 3 },
+  flyer:     { w: 148, h: 210, bleed: 3 },
+  poster:    { w: 297, h: 420, bleed: 5 },
+  rollup:    { w: 800, h: 2000, bleed: 10 },
+  brochure:  { w: 210, h: 99,  bleed: 3 },
+  cover:     { w: 210, h: 285, bleed: 3 },
+};
+
+const canvasShell = document.getElementById('canvasShell');
+const bleedGuide  = document.getElementById('bleedGuide');
+const dimsLabel   = document.getElementById('dimsLabel');
+const fabricCanvas = new fabric.Canvas('mainCanvas', { preserveObjectStacking: true });
+
+let currentTemplateKey = 'card';
+
+function applyTemplate(key){
+  currentTemplateKey = key;
+  const t = TEMPLATES[key];
+  const pxW = Math.round(t.w * PX_PER_MM);
+  const pxH = Math.round(t.h * PX_PER_MM);
+
+  fabricCanvas.setWidth(pxW);
+  fabricCanvas.setHeight(pxH);
+  fabricCanvas.backgroundColor = '#ffffff';
+  fabricCanvas.renderAll();
+
+  // 大尺寸模板（如展架、海报）用 CSS 缩放适配屏幕，画布真实像素不变，
+  // 保证导出/打印时仍按真实规格输出
+  const maxDisplay = 640;
+  const scale = Math.min(1, maxDisplay / Math.max(pxW, pxH));
+  canvasShell.style.width = pxW + 'px';
+  canvasShell.style.height = pxH + 'px';
+  canvasShell.style.transform = `scale(${scale})`;
+  canvasShell.style.transformOrigin = 'center center';
+
+  // 出血/安全区参考线——距边 bleed(mm) 处画一圈虚线
+  const bleedPx = t.bleed * PX_PER_MM;
+  bleedGuide.style.left = bleedPx + 'px';
+  bleedGuide.style.top = bleedPx + 'px';
+  bleedGuide.style.width = (pxW - bleedPx * 2) + 'px';
+  bleedGuide.style.height = (pxH - bleedPx * 2) + 'px';
+
+  dimsLabel.textContent = `${t.w} × ${t.h} mm ・出血 ${t.bleed}mm`;
+}
+
+document.getElementById('templateSelect').addEventListener('change', (e) => {
+  applyTemplate(e.target.value);
+});
+applyTemplate(currentTemplateKey);
+
+/* ---------------- 添加文字 ---------------- */
+document.getElementById('addTextBtn').addEventListener('click', () => {
+  const text = new fabric.IText('双击编辑文字', {
+    left: fabricCanvas.getWidth() / 2 - 60,
+    top: fabricCanvas.getHeight() / 2 - 15,
+    fontSize: 28,
+    fill: '#20232B',
+    fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+  });
+  fabricCanvas.add(text);
+  fabricCanvas.setActiveObject(text);
+  fabricCanvas.renderAll();
+});
+
+/* ---------------- 上传 / 替换图片 ---------------- */
+const imageInput = document.getElementById('imageInput');
+document.getElementById('uploadImageBtn').addEventListener('click', () => imageInput.click());
+
+imageInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    fabric.Image.fromURL(ev.target.result, (img) => {
+      const maxW = fabricCanvas.getWidth() * 0.6;
+      if (img.width > maxW) img.scale(maxW / img.width);
+      img.set({ left: 40, top: 40 });
+      fabricCanvas.add(img);
+      fabricCanvas.setActiveObject(img);
+      fabricCanvas.renderAll();
+    });
+  };
+  reader.readAsDataURL(file);
+  imageInput.value = '';
+});
+
+/* ---------------- 添加 Logo（同样是图片，默认更小、放右下角） ---------------- */
+const logoInput = document.getElementById('logoInput');
+document.getElementById('addLogoBtn').addEventListener('click', () => logoInput.click());
+
+logoInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    fabric.Image.fromURL(ev.target.result, (img) => {
+      const targetW = fabricCanvas.getWidth() * 0.18;
+      img.scale(targetW / img.width);
+      img.set({
+        left: fabricCanvas.getWidth() - targetW - 16,
+        top: fabricCanvas.getHeight() - (img.height * img.scaleY) - 16,
+      });
+      fabricCanvas.add(img);
+      fabricCanvas.setActiveObject(img);
+      fabricCanvas.renderAll();
+    });
+  };
+  reader.readAsDataURL(file);
+  logoInput.value = '';
+});
+
+/* ---------------- 生成二维码 ---------------- */
+const qrModalMask = document.getElementById('qrModalMask');
+document.getElementById('addQrBtn').addEventListener('click', () => {
+  qrModalMask.style.display = 'flex';
+  document.getElementById('qrTextInput').focus();
+});
+document.getElementById('qrCancelBtn').addEventListener('click', () => {
+  qrModalMask.style.display = 'none';
+});
+document.getElementById('qrConfirmBtn').addEventListener('click', () => {
+  const text = document.getElementById('qrTextInput').value.trim();
+  if (!text) return;
+
+  const hidden = document.getElementById('qr-hidden');
+  hidden.innerHTML = '';
+  new QRCode(hidden, { text, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+
+  // qrcodejs 是同步渲染的，稍作延迟保证节点已生成
+  setTimeout(() => {
+    const qrCanvas = hidden.querySelector('canvas');
+    const dataUrl = qrCanvas ? qrCanvas.toDataURL() : hidden.querySelector('img').src;
+    fabric.Image.fromURL(dataUrl, (img) => {
+      const targetW = fabricCanvas.getWidth() * 0.2;
+      img.scale(targetW / img.width);
+      img.set({ left: 20, top: fabricCanvas.getHeight() - targetW - 20 });
+      fabricCanvas.add(img);
+      fabricCanvas.setActiveObject(img);
+      fabricCanvas.renderAll();
+      qrModalMask.style.display = 'none';
+      document.getElementById('qrTextInput').value = '';
+    });
+  }, 60);
+});
+
+/* ---------------- 图层操作 / 删除 ---------------- */
+document.getElementById('bringForwardBtn').addEventListener('click', () => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) { fabricCanvas.bringForward(obj); fabricCanvas.renderAll(); }
+});
+document.getElementById('sendBackwardBtn').addEventListener('click', () => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) { fabricCanvas.sendBackwards(obj); fabricCanvas.renderAll(); }
+});
+document.getElementById('deleteObjBtn').addEventListener('click', () => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) { fabricCanvas.remove(obj); fabricCanvas.renderAll(); }
+});
+
+/* ---------------- 右侧属性面板 ---------------- */
+const propEmpty = document.getElementById('propEmpty');
+const propText  = document.getElementById('propText');
+const propImage = document.getElementById('propImage');
+
+function refreshPropPanel(){
+  const obj = fabricCanvas.getActiveObject();
+  propEmpty.style.display = 'none';
+  propText.style.display = 'none';
+  propImage.style.display = 'none';
+
+  if (!obj) { propEmpty.style.display = 'block'; return; }
+
+  if (obj.type === 'i-text' || obj.type === 'text') {
+    propText.style.display = 'block';
+    document.getElementById('fontSizeRange').value = obj.fontSize;
+    document.getElementById('fontColorInput').value = rgbToHex(obj.fill);
+  } else if (obj.type === 'image') {
+    propImage.style.display = 'block';
+    document.getElementById('opacityRange').value = Math.round((obj.opacity ?? 1) * 100);
+  } else {
+    propEmpty.style.display = 'block';
+  }
+}
+function rgbToHex(v){
+  if (!v) return '#20232B';
+  if (v.startsWith('#')) return v;
+  return '#20232B';
+}
+fabricCanvas.on('selection:created', refreshPropPanel);
+fabricCanvas.on('selection:updated', refreshPropPanel);
+fabricCanvas.on('selection:cleared', refreshPropPanel);
+
+document.getElementById('fontSizeRange').addEventListener('input', (e) => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) { obj.set('fontSize', parseInt(e.target.value)); fabricCanvas.renderAll(); }
+});
+document.getElementById('fontColorInput').addEventListener('input', (e) => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) { obj.set('fill', e.target.value); fabricCanvas.renderAll(); }
+});
+document.getElementById('boldBtn').addEventListener('click', () => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) {
+    obj.set('fontWeight', obj.fontWeight === 'bold' ? 'normal' : 'bold');
+    fabricCanvas.renderAll();
+  }
+});
+document.getElementById('alignBtn').addEventListener('click', () => {
+  const obj = fabricCanvas.getActiveObject();
+  if (!obj) return;
+  const order = ['left', 'center', 'right'];
+  const next = order[(order.indexOf(obj.textAlign) + 1) % order.length];
+  obj.set('textAlign', next);
+  fabricCanvas.renderAll();
+});
+document.getElementById('opacityRange').addEventListener('input', (e) => {
+  const obj = fabricCanvas.getActiveObject();
+  if (obj) { obj.set('opacity', parseInt(e.target.value) / 100); fabricCanvas.renderAll(); }
+});
+document.getElementById('replaceImageBtn').addEventListener('click', () => {
+  const obj = fabricCanvas.getActiveObject();
+  if (!obj || obj.type !== 'image') return;
+  imageInput.onchangeOverride = true;
+  const tempInput = document.createElement('input');
+  tempInput.type = 'file'; tempInput.accept = 'image/*';
+  tempInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      fabric.Image.fromURL(ev.target.result, (img) => {
+        img.scale(obj.scaleX * (obj.width / img.width));
+        img.set({ left: obj.left, top: obj.top, angle: obj.angle });
+        fabricCanvas.remove(obj);
+        fabricCanvas.add(img);
+        fabricCanvas.setActiveObject(img);
+        fabricCanvas.renderAll();
+        refreshPropPanel();
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+  tempInput.click();
+});
+
+/* =========================================================
+   版本管理（原型示意）
+   真实项目中：每次"保存版本"应调用 Spring Boot 接口，例如
+   POST /api/design/{designId}/versions   body: canvas.toJSON()
+   后端存版本记录 + JSON 内容（或存对象存储，DB 只留指针）
+   这里先用内存数组模拟，回溯即 canvas.loadFromJSON(...)
+   ========================================================= */
+let versions = [];
+
+document.getElementById('saveVersionBtn').addEventListener('click', () => {
+  const json = fabricCanvas.toJSON();
+  const thumb = fabricCanvas.toDataURL({ format: 'png', multiplier: 0.3 });
+  const record = {
+    id: Date.now(),
+    time: new Date().toLocaleString('zh-CN', { hour12: false }),
+    json,
+    thumb,
+    templateKey: currentTemplateKey,
+  };
+  versions.unshift(record);
+  renderVersionList();
+
+  // —— 接入后端时替换为：
+  // fetch(`/api/design/${designId}/versions`, {
+  //   method: 'POST',
+  //   headers: { 'Content-Type': 'application/json' },
+  //   body: JSON.stringify({ canvasJson: json, templateKey: currentTemplateKey })
+  // });
+});
+
+function renderVersionList(){
+  const list = document.getElementById('versionList');
+  if (versions.length === 0) {
+    list.innerHTML = '<div class="empty-hint">还没有保存的版本</div>';
+    return;
+  }
+  list.innerHTML = versions.map(v => `
+    <div class="version-item" data-id="${v.id}">
+      <div class="thumb" style="background-image:url(${v.thumb})"></div>
+      <span>${v.time}</span>
+    </div>
+  `).join('');
+  list.querySelectorAll('.version-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const rec = versions.find(v => v.id == el.dataset.id);
+      if (!rec) return;
+      if (rec.templateKey !== currentTemplateKey) {
+        document.getElementById('templateSelect').value = rec.templateKey;
+        applyTemplate(rec.templateKey);
+      }
+      fabricCanvas.loadFromJSON(rec.json, () => fabricCanvas.renderAll());
+    });
+  });
+}
+
+/* ---------------- 一键下单（占位） ---------------- */
+document.getElementById('orderBtn').addEventListener('click', () => {
+  const t = TEMPLATES[currentTemplateKey];
+  const payload = {
+    templateKey: currentTemplateKey,
+    sizeMm: { w: t.w, h: t.h },
+    canvasJson: fabricCanvas.toJSON(),
+  };
+  console.log('提交订单 payload（对接 /api/orders 接口）:', payload);
+  alert(
+    `模拟下单：\n模板: ${currentTemplateKey}\n规格: ${t.w}×${t.h}mm\n` +
+    `（真实项目中此处应 fetch POST /api/orders，\n后端自动填充尺寸/纸张/工艺参数并跳转到门店下单页）`
+  );
+});
+</script>
+</body>
+</html>

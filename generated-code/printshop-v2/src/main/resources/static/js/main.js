@@ -23,6 +23,7 @@ const handlers = {
   saveDesignVersion,
   restoreDesignVersion,
   submitDesignOrder,
+  runDemoTest,
 };
 
 let registerMode = false;
@@ -189,6 +190,17 @@ async function clearBusinessData() {
   state.records = [];
   await loadModule("dashboard");
   show(data, "业务数据已清空");
+}
+
+async function runDemoTest() {
+  if (state.user?.role !== "ADMIN") return;
+  if (!confirm("确认清空业务数据并生成 CR09 一键测试数据？基础账号、门店、模板和默认库存会保留。")) return;
+  const data = await api("/api/admin/demo-test", {
+    method: "POST",
+    body: JSON.stringify({ orders: 24, clear: true }),
+  });
+  await loadModule("storeQualityRanking");
+  show(data, data.message || "CR09 一键测试完成");
 }
 
 async function runRecordAction(method, path, body) {
@@ -455,6 +467,7 @@ el.loginForm.addEventListener("submit", login);
 el.registerModeBtn.addEventListener("click", () => toggleRegisterMode());
 el.loginForm.addEventListener("input", clearAuthError);
 el.logoutBtn.addEventListener("click", logout);
+el.demoTestBtn.addEventListener("click", () => runDemoTest().catch(showError));
 el.clearDataBtn.addEventListener("click", () => clearBusinessData().catch(showError));
 el.refreshBtn.addEventListener("click", () => loadModule().catch(showError));
 el.newBtn.addEventListener("click", () => {

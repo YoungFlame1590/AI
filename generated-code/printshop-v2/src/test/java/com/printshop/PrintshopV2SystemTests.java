@@ -1221,6 +1221,31 @@ class PrintshopV2SystemTests {
                 .andExpect(content().string(containsString("storeQualityRanking")));
     }
 
+    @Test
+    void shouldAllowAdminToRunOneClickCr09DemoTest() throws Exception {
+        mockMvc.perform(post("/api/admin/demo-test")
+                        .with(httpBasic("customer", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/demo-test")
+                        .with(httpBasic("admin", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orders\":24,\"clear\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.message").value("CR09 一键测试数据已生成。"))
+                .andExpect(jsonPath("$.data.requestedOrders").value(24))
+                .andExpect(jsonPath("$.data.stageDistribution.DONE").value(3))
+                .andExpect(jsonPath("$.data.storeQualityRanking.length()", greaterThanOrEqualTo(3)))
+                .andExpect(jsonPath("$.data.storeQualityRanking[0].storeId").value(2))
+                .andExpect(jsonPath("$.data.storeQualityRanking[0].averageRating").value(5.0))
+                .andExpect(jsonPath("$.data.storeQualityRanking[2].storeId").value(3))
+                .andExpect(jsonPath("$.data.storeQualityRanking[2].complaintCount").value(1))
+                .andExpect(jsonPath("$.data.complaintCount", greaterThanOrEqualTo(1)))
+                .andExpect(content().string(containsString("forecastNext30Days")));
+    }
+
     private MvcResult createOrder(String username, String productType, String colorMode, int pageCount, int copies, String deliveryMode, String priority) throws Exception {
         return mockMvc.perform(post("/api/orders")
                         .with(httpBasic(username, "demo123"))
