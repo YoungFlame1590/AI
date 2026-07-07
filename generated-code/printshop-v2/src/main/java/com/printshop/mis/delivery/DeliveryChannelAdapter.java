@@ -3,7 +3,7 @@ package com.printshop.mis.delivery;
 import java.math.BigDecimal;
 
 public interface DeliveryChannelAdapter {
-    DeliveryChannelQuote quote(String channelCode, BigDecimal packageWeightKg);
+    DeliveryChannelQuote quote(String channelCode, BigDecimal packageWeightKg, String pickupAddress, String deliveryAddress);
     String nextStatus(String currentStatus);
     String trackingMessage(String status);
 

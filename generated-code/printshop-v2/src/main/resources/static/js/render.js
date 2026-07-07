@@ -311,7 +311,7 @@ function readDialogForm(dialog) {
 
 function defaultActionFieldValue(type, options = []) {
   if (type === "select") {
-    return options[options.length - 1] || "";
+    return optionValue(options[options.length - 1]);
   }
   return "";
 }
@@ -704,13 +704,15 @@ function createFieldNode(field, type, options = [], value = "") {
   if (type === "select") {
     const node = document.createElement("select");
     const normalizedValue = String(normalizeOptionValue(value));
+    const optionValues = [];
     for (const option of options) {
       const optionNode = document.createElement("option");
-      optionNode.value = option;
-      optionNode.textContent = option;
+      optionNode.value = optionValue(option);
+      optionNode.textContent = optionLabel(option);
+      optionValues.push(optionNode.value);
       node.appendChild(optionNode);
     }
-    node.value = options.includes(normalizedValue) ? normalizedValue : options[0];
+    node.value = optionValues.includes(normalizedValue) ? normalizedValue : optionValues[0];
     return node;
   }
   const node = document.createElement("input");
@@ -724,6 +726,20 @@ function createFieldNode(field, type, options = [], value = "") {
     }
   }
   return node;
+}
+
+function optionValue(option) {
+  if (option && typeof option === "object") {
+    return String(option.value ?? option.label ?? "");
+  }
+  return option === undefined || option === null ? "" : String(option);
+}
+
+function optionLabel(option) {
+  if (option && typeof option === "object") {
+    return String(option.label ?? option.value ?? "");
+  }
+  return option === undefined || option === null ? "" : String(option);
 }
 
 function addAction(label, handler, cls = "") {

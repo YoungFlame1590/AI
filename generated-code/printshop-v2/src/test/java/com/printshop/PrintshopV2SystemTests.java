@@ -1140,6 +1140,21 @@ class PrintshopV2SystemTests {
         Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
         progressToProductionDone(orderId);
 
+        mockMvc.perform(post("/api/delivery-quotes")
+                        .with(httpBasic("ops", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderId": %d,
+                                  "channelCode": "IMMEDIATE",
+                                  "pickupAddress": "大学城店",
+                                  "deliveryAddress": "北京市海淀区客户公司前台",
+                                  "packageWeightKg": 1.5
+                                }
+                                """.formatted(orderId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("超出即时配送范围")));
+
         MvcResult quote = mockMvc.perform(post("/api/delivery-quotes")
                         .with(httpBasic("ops", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1148,12 +1163,13 @@ class PrintshopV2SystemTests {
                                   "orderId": %d,
                                   "channelCode": "IMMEDIATE",
                                   "pickupAddress": "大学城店",
-                                  "deliveryAddress": "客户公司前台",
+                                  "deliveryAddress": "广州市大学城客户公司前台",
                                   "packageWeightKg": 1.5
                                 }
                                 """.formatted(orderId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.estimatedFee").exists())
+                .andExpect(jsonPath("$.data.deliveryAddress").value("广州市大学城客户公司前台"))
                 .andReturn();
         Integer quoteId = JsonPath.read(quote.getResponse().getContentAsString(), "$.data.id");
 

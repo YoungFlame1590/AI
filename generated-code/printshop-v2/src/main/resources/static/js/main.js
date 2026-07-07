@@ -1,5 +1,5 @@
 import { api, authHeader, show, showError } from "./api.js";
-import { modules, serviceReviewFormFields } from "./config.js";
+import { deliveryQuoteFormFields, modules, serviceReviewFormFields } from "./config.js";
 import { defaultRecordForModule, updateOrderAmountPreview } from "./orders.js";
 import {
   allowedModules,
@@ -215,7 +215,8 @@ async function runRecordAction(method, path, body) {
   } else if (body === "__designSubmitOrder") {
     body = buildDesignSubmitOrderBody();
   } else if (body === "__deliveryQuoteFromOrder") {
-    body = buildDeliveryQuoteBody();
+    body = await buildDeliveryQuoteBody();
+    if (!body) return;
   } else if (body === "__serviceReviewFromInvitation" || body === "__serviceReviewFromTask") {
     const orderId = state.selected?.orderId || state.selectedTask?.orderId || state.selected?.id;
     path = `/api/orders/${orderId}/service-reviews`;
@@ -350,14 +351,25 @@ function buildDesignSubmitOrderBody() {
   };
 }
 
-function buildDeliveryQuoteBody() {
+async function buildDeliveryQuoteBody() {
   const order = state.selected || {};
+  const values = await promptActionForm({
+    title: "第三方配送报价",
+    fields: deliveryQuoteFormFields,
+    initial: {
+      deliveryAddress: "",
+      packageWeightKg: String(Math.max(0.5, Number(order.copies || 1) / 100)),
+      channelCode: order.priority === "特急" ? "IMMEDIATE" : "EXPRESS",
+    },
+    submitLabel: "获取报价",
+  });
+  if (!values) return null;
   return {
     orderId: order.id,
-    channelCode: order.priority === "特急" ? "IMMEDIATE" : "EXPRESS",
+    channelCode: values.channelCode,
     pickupAddress: order.storeName || "门店",
-    deliveryAddress: "客户收货地址",
-    packageWeightKg: Math.max(0.5, Number(order.copies || 1) / 100),
+    deliveryAddress: values.deliveryAddress,
+    packageWeightKg: Number(values.packageWeightKg),
   };
 }
 

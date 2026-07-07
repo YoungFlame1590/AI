@@ -87,6 +87,15 @@ export const serviceReviewFormFields = [
   ["comment", "评价内容", "textarea"],
 ];
 
+export const deliveryQuoteFormFields = [
+  ["deliveryAddress", "收货地址", "text"],
+  ["packageWeightKg", "包裹重量(kg)", "number"],
+  ["channelCode", "配送渠道", "select", [
+    { value: "IMMEDIATE", label: "即时配送" },
+    { value: "EXPRESS", label: "快递配送" },
+  ]],
+];
+
 export const modules = {
   dashboard: { title: "工作台", endpoint: "/api/me/dashboard", readonly: true },
   orders: {

@@ -75,14 +75,21 @@ public class DeliveryService {
         changeGuard.requireNoPendingChange(order, "配送报价");
         String channelCode = text(asString(payload.get("channelCode")), "IMMEDIATE").toUpperCase();
         BigDecimal weight = new BigDecimal(String.valueOf(payload.getOrDefault("packageWeightKg", "1"))).max(new BigDecimal("0.1"));
-        var channelQuote = deliveryChannelAdapter.quote(channelCode, weight.setScale(2, RoundingMode.HALF_UP));
+        String pickupAddress = text(asString(payload.get("pickupAddress")), text(order.storeName, "门店"));
+        String deliveryAddress = text(asString(payload.get("deliveryAddress")), "客户收货地址");
+        var channelQuote = deliveryChannelAdapter.quote(
+                channelCode,
+                weight.setScale(2, RoundingMode.HALF_UP),
+                pickupAddress,
+                deliveryAddress
+        );
         DeliveryQuote quote = new DeliveryQuote();
         quote.quoteNo = code("DLQ");
         quote.orderId = order.id;
         quote.channelCode = channelQuote.channelCode();
         quote.channelName = channelQuote.channelName();
-        quote.pickupAddress = text(asString(payload.get("pickupAddress")), text(order.storeName, "门店"));
-        quote.deliveryAddress = text(asString(payload.get("deliveryAddress")), "客户收货地址");
+        quote.pickupAddress = pickupAddress;
+        quote.deliveryAddress = deliveryAddress;
         quote.packageWeightKg = weight.setScale(2, RoundingMode.HALF_UP);
         quote.estimatedMinutes = channelQuote.estimatedMinutes();
         quote.estimatedFee = channelQuote.fee();
