@@ -481,6 +481,48 @@ tr.selected {
   grid-column: 1 / -1;
 }
 
+.action-dialog {
+  width: min(520px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgba(28, 43, 54, 0.25);
+}
+
+.action-dialog::backdrop {
+  background: rgba(19, 33, 31, 0.32);
+}
+
+.action-dialog-form {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.action-dialog-form header,
+.action-dialog-form footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.action-dialog-form h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.action-dialog-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-dialog-fields label.wide {
+  grid-column: 1 / -1;
+}
+
 .initial-order-upload {
   display: grid;
   gap: 12px;

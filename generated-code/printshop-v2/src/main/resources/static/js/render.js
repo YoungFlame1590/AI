@@ -147,13 +147,15 @@ export function renderForm(handlers) {
   } else {
     renderReadonlyActions(config, handlers);
   }
-  const showManagementActions = state.module !== "orders" || state.user?.role === "ADMIN";
-  for (const [label, method, pathFactory, body, actionKey] of showManagementActions ? (config.actions || []) : []) {
-    if (state.selected?.id && !state.editing) {
-      if (actionKey && !(actionRoles[actionKey] || []).includes(state.user?.role)) {
-        continue;
+  if (!config.readonly) {
+    const showManagementActions = state.module !== "orders" || state.user?.role === "ADMIN";
+    for (const [label, method, pathFactory, body, actionKey] of showManagementActions ? (config.actions || []) : []) {
+      if (state.selected?.id && !state.editing) {
+        if (actionKey && !(actionRoles[actionKey] || []).includes(state.user?.role)) {
+          continue;
+        }
+        addAction(label, () => handlers.runRecordAction(method, pathFactory(state.selected.id), body || {}));
       }
-      addAction(label, () => handlers.runRecordAction(method, pathFactory(state.selected.id), body || {}));
     }
   }
   if (state.module === "orders" && state.selected?.id && !state.editing && state.user?.role !== "COURIER") {
@@ -237,7 +239,81 @@ export function renderAggregateDetail(handlers) {
     addAction("审批通过", () => handlers.runChangeTask("approve", state.selectedTask.changeRequestId), "primary");
     addAction("驳回", () => handlers.runChangeTask("reject", state.selectedTask.changeRequestId), "danger");
   }
+  if (state.selectedTask?.type === "SERVICE_REVIEW") {
+    addAction("提交评价", () => handlers.runRecordAction("POST", state.selectedTask.path, "__serviceReviewFromTask"), "primary");
+  }
   renderTimeline(aggregate.audits || []);
+}
+
+export function promptActionForm({ title, fields, initial = {}, submitLabel = "提交" }) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "action-dialog";
+    dialog.innerHTML = `
+      <form method="dialog" class="action-dialog-form">
+        <header>
+          <h3>${escapeHtml(title || "填写信息")}</h3>
+        </header>
+        <div class="action-dialog-fields"></div>
+        <footer>
+          <button type="button" data-dialog-cancel>取消</button>
+          <button type="submit" class="primary">${escapeHtml(submitLabel)}</button>
+        </footer>
+      </form>
+    `;
+    const fieldWrap = dialog.querySelector(".action-dialog-fields");
+    for (const [field, label, type, options] of fields || []) {
+      const node = createFieldNode(field, type, options, initial[field] ?? defaultActionFieldValue(type, options));
+      node.name = field;
+      if (type !== "textarea") {
+        node.required = true;
+      }
+      const wrapper = document.createElement("label");
+      if (type === "textarea") {
+        wrapper.className = "wide";
+      }
+      wrapper.textContent = label;
+      wrapper.appendChild(node);
+      fieldWrap.appendChild(wrapper);
+    }
+    let resolved = false;
+    const finish = (value) => {
+      if (resolved) return;
+      resolved = true;
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.querySelector("[data-dialog-cancel]").addEventListener("click", () => finish(null));
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      finish(null);
+    });
+    dialog.querySelector("form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      finish(readDialogForm(dialog));
+    });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    dialog.querySelector("select, input, textarea")?.focus();
+  });
+}
+
+function readDialogForm(dialog) {
+  const payload = {};
+  for (const input of dialog.querySelectorAll("input, textarea, select")) {
+    const value = input.value.trim();
+    if (value === "") continue;
+    payload[input.name] = input.type === "number" ? Number(value) : value;
+  }
+  return payload;
+}
+
+function defaultActionFieldValue(type, options = []) {
+  if (type === "select") {
+    return options[options.length - 1] || "";
+  }
+  return "";
 }
 
 export function renderTimeline(audits = []) {

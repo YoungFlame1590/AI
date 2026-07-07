@@ -1,10 +1,11 @@
 import { api, authHeader, show, showError } from "./api.js";
-import { modules } from "./config.js";
+import { modules, serviceReviewFormFields } from "./config.js";
 import { defaultRecordForModule, updateOrderAmountPreview } from "./orders.js";
 import {
   allowedModules,
   renderForm,
   renderMetrics,
+  promptActionForm,
   renderTable,
   renderTimeline,
   toggleAuth,
@@ -215,9 +216,11 @@ async function runRecordAction(method, path, body) {
     body = buildDesignSubmitOrderBody();
   } else if (body === "__deliveryQuoteFromOrder") {
     body = buildDeliveryQuoteBody();
-  } else if (body === "__serviceReviewFromInvitation") {
-    path = `/api/orders/${state.selected?.orderId}/service-reviews`;
-    body = buildServiceReviewBody();
+  } else if (body === "__serviceReviewFromInvitation" || body === "__serviceReviewFromTask") {
+    const orderId = state.selected?.orderId || state.selectedTask?.orderId || state.selected?.id;
+    path = `/api/orders/${orderId}/service-reviews`;
+    body = await buildServiceReviewBody();
+    if (!body) return;
   } else if (body === "__complaintReply") {
     body = { reply: "已联系客户并记录处理方案，24小时内跟进完成。" };
   }
@@ -358,13 +361,26 @@ function buildDeliveryQuoteBody() {
   };
 }
 
-function buildServiceReviewBody() {
+async function buildServiceReviewBody() {
+  const values = await promptActionForm({
+    title: "提交服务评价",
+    fields: serviceReviewFormFields,
+    initial: {
+      printQualityRating: "5",
+      timelinessRating: "5",
+      staffRating: "5",
+      valueRating: "5",
+      comment: "",
+    },
+    submitLabel: "提交评价",
+  });
+  if (!values) return null;
   return {
-    printQualityRating: 5,
-    timelinessRating: 5,
-    staffRating: 5,
-    valueRating: 5,
-    comment: "服务顺利完成，系统自动提交演示评价。",
+    printQualityRating: Number(values.printQualityRating),
+    timelinessRating: Number(values.timelinessRating),
+    staffRating: Number(values.staffRating),
+    valueRating: Number(values.valueRating),
+    comment: values.comment || "",
   };
 }
 

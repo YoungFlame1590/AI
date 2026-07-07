@@ -78,6 +78,14 @@ export const actionRoles = {
   fullFlow: ["ADMIN"],
 };
 
+export const serviceReviewFormFields = [
+  ["printQualityRating", "印刷质量", "select", ["1", "2", "3", "4", "5"]],
+  ["timelinessRating", "准时性", "select", ["1", "2", "3", "4", "5"]],
+  ["staffRating", "服务态度", "select", ["1", "2", "3", "4", "5"]],
+  ["valueRating", "性价比", "select", ["1", "2", "3", "4", "5"]],
+  ["comment", "评价内容", "textarea"],
+];
+
 export const modules = {
   dashboard: { title: "工作台", endpoint: "/api/me/dashboard", readonly: true },
   orders: {
@@ -417,7 +425,7 @@ export const modules = {
       ["respondedAt", "评价时间"],
     ],
     columns: ["orderNo", "customerName", "status", "invitedAt"],
-    actions: [["提交五星评价", "POST", () => "__serviceReviewPath", "__serviceReviewFromInvitation", "submitServiceReview"]],
+    actions: [["提交评价", "POST", () => "__serviceReviewPath", "__serviceReviewFromInvitation", "submitServiceReview"]],
   },
   serviceReviews: {
     title: "服务评价",
