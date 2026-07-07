@@ -71,6 +71,13 @@ public class InventoryService {
         return inventoryItems.save(item);
     }
 
+    public InventoryItem setInventoryQuantity(String username, Long id, BigDecimal targetQuantity) {
+        InventoryItem item = getInventoryItem(id);
+        item.quantity = targetQuantity == null ? BigDecimal.ZERO : targetQuantity;
+        audit.record(username, "INV", "SET_INVENTORY_QUANTITY", "INVENTORY", id, item.quantity.toPlainString());
+        return inventoryItems.save(item);
+    }
+
     public InventoryItem deleteInventory(String username, Long id) {
         InventoryItem item = getInventoryItem(id);
         inventoryItems.delete(item);

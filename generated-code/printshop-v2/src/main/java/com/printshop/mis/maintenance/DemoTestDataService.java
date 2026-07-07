@@ -23,6 +23,7 @@ import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,12 @@ public class DemoTestDataService {
             new StoreProfile("A", "大学城店", "customer", "clerk"),
             new StoreProfile("B", "市中心店", "customer_b", "clerk_b"),
             new StoreProfile("C", "西区店", "customer_c", "clerk_c")
+    );
+    private static final Map<String, BigDecimal> DEMO_INVENTORY_LEVELS = Map.of(
+            "PAPER-A4-80G", new BigDecimal("4000"),
+            "PAPER-COATED-300G", new BigDecimal("150"),
+            "INK-COLOR", new BigDecimal("120"),
+            "BINDING-CONSUMABLE", new BigDecimal("60")
     );
     private static final byte[] DEMO_FILE = "%PDF-1.4\n% CR09 one-click demo placeholder\n"
             .getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -93,7 +100,7 @@ public class DemoTestDataService {
         }
         ensureDemoAccountsExist();
         seedHistoricalConsumption();
-        topUpInventory(username);
+        setDemoInventoryLevels(username, expectedProductionConsumption(requestedOrders));
 
         Map<String, Integer> stageDistribution = new LinkedHashMap<>();
         STAGES.forEach(stage -> stageDistribution.put(stage, 0));
@@ -110,8 +117,10 @@ public class DemoTestDataService {
             }
             stageDistribution.compute(stage, (ignored, count) -> count == null ? 1 : count + 1);
         }
+        setDemoInventoryLevels(username, Map.of());
 
         List<Map<String, Object>> ranking = reportingService.storeQualityRanking(username);
+        List<Map<String, Object>> recommendations = replenishmentService.recommendations(username);
         List<Map<String, Object>> forecast = replenishmentService.forecastNextThirtyDays(username);
         return Map.of(
                 "message", "CR09 一键测试数据已生成。",
@@ -121,6 +130,7 @@ public class DemoTestDataService {
                 "complaintCount", complaints.count(),
                 "orderCount", orders.count(),
                 "storeQualityRanking", ranking,
+                "replenishmentRecommendations", recommendations,
                 "replenishmentForecast", forecast
         );
     }
@@ -282,11 +292,46 @@ public class DemoTestDataService {
         return new BigDecimal("650").subtract(BigDecimal.valueOf(index * 10L)).max(new BigDecimal("400"));
     }
 
-    private void topUpInventory(String username) {
+    private void setDemoInventoryLevels(String username, Map<String, BigDecimal> additionalRequired) {
         inventoryService.ensureDefaultInventory();
         for (InventoryItem item : inventoryService.inventoryItems()) {
-            inventoryService.adjustInventory(username, item.id, Map.of("delta", new BigDecimal("1000000")));
+            BigDecimal target = DEMO_INVENTORY_LEVELS.get(item.sku);
+            if (target != null) {
+                BigDecimal additional = additionalRequired.getOrDefault(item.sku, BigDecimal.ZERO);
+                inventoryService.setInventoryQuantity(username, item.id, target.add(additional));
+            }
         }
+    }
+
+    private Map<String, BigDecimal> expectedProductionConsumption(int requestedOrders) {
+        Map<String, BigDecimal> required = new LinkedHashMap<>();
+        for (int index = 0; index < requestedOrders; index++) {
+            String stage = STAGES.get(index % STAGES.size());
+            if (!Set.of("PRODUCTION_DONE", "DELIVERING", "DONE").contains(stage)) {
+                continue;
+            }
+            PrintOrder order = orderPayload(index);
+            requiredMaterials(order.productType, order.colorMode, order.pageCount, order.copies)
+                    .forEach((sku, quantity) -> required.merge(sku, quantity, BigDecimal::add));
+        }
+        return required;
+    }
+
+    private Map<String, BigDecimal> requiredMaterials(String productType, String colorMode, Integer pageCount, Integer copies) {
+        int safePages = Math.max(1, pageCount == null ? 1 : pageCount);
+        int safeCopies = Math.max(1, copies == null ? 1 : copies);
+        Map<String, BigDecimal> required = new LinkedHashMap<>();
+        String paperSku = Set.of("名片快印", "海报写真", "写真展板").contains(productType)
+                ? "PAPER-COATED-300G"
+                : "PAPER-A4-80G";
+        required.merge(paperSku, BigDecimal.valueOf((long) safePages * safeCopies), BigDecimal::add);
+        if (!"黑白".equals(colorMode)) {
+            required.merge("INK-COLOR", BigDecimal.valueOf(safeCopies), BigDecimal::add);
+        }
+        if (Set.of("论文胶装", "培训手册").contains(productType) || "装订加覆膜".equals(colorMode)) {
+            required.merge("BINDING-CONSUMABLE", BigDecimal.valueOf(safeCopies), BigDecimal::add);
+        }
+        return required;
     }
 
     private void ensureDemoAccountsExist() {

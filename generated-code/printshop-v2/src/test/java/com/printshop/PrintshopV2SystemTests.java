@@ -1,5 +1,8 @@
 package com.printshop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
@@ -21,6 +24,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageTypeSpecifier;
@@ -1244,6 +1249,29 @@ class PrintshopV2SystemTests {
                 .andExpect(jsonPath("$.data.storeQualityRanking[2].complaintCount").value(1))
                 .andExpect(jsonPath("$.data.complaintCount", greaterThanOrEqualTo(1)))
                 .andExpect(content().string(containsString("forecastNext30Days")));
+
+        assertEquals(0, inventoryQuantity("PAPER-A4-80G").compareTo(new BigDecimal("4000")));
+        assertEquals(0, inventoryQuantity("PAPER-COATED-300G").compareTo(new BigDecimal("150")));
+        assertEquals(0, inventoryQuantity("INK-COLOR").compareTo(new BigDecimal("120")));
+        assertEquals(0, inventoryQuantity("BINDING-CONSUMABLE").compareTo(new BigDecimal("60")));
+
+        MvcResult recommendations = mockMvc.perform(get("/api/replenishment/recommendations")
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<Map<String, Object>> recommendationRows = JsonPath.read(recommendations.getResponse().getContentAsString(), "$.data");
+        assertFalse(Boolean.TRUE.equals(rowBySku(recommendationRows, "PAPER-A4-80G").get("lowStock")));
+        assertTrue(Boolean.TRUE.equals(rowBySku(recommendationRows, "PAPER-COATED-300G").get("lowStock")));
+        assertTrue(Boolean.TRUE.equals(rowBySku(recommendationRows, "INK-COLOR").get("lowStock")));
+        assertTrue(Boolean.TRUE.equals(rowBySku(recommendationRows, "BINDING-CONSUMABLE").get("lowStock")));
+
+        MvcResult suggestions = mockMvc.perform(post("/api/replenishment/recalculate")
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<Map<String, Object>> suggestionRows = JsonPath.read(suggestions.getResponse().getContentAsString(), "$.data");
+        assertTrue(hasPositiveSuggestion(suggestionRows, "PAPER-COATED-300G"));
+        assertTrue(hasPositiveSuggestion(suggestionRows, "BINDING-CONSUMABLE"));
     }
 
     private MvcResult createOrder(String username, String productType, String colorMode, int pageCount, int copies, String deliveryMode, String priority) throws Exception {
@@ -1444,5 +1472,19 @@ class PrintshopV2SystemTests {
                 .findFirst()
                 .map(item -> Integer.valueOf(String.valueOf(item.get("id"))))
                 .orElseThrow();
+    }
+
+    private Map<String, Object> rowBySku(List<Map<String, Object>> rows, String sku) {
+        return rows.stream()
+                .filter(row -> sku.equals(row.get("sku")))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private boolean hasPositiveSuggestion(List<Map<String, Object>> rows, String sku) {
+        return rows.stream()
+                .filter(row -> sku.equals(row.get("sku")))
+                .map(row -> new BigDecimal(String.valueOf(row.get("recommendedQuantity"))))
+                .anyMatch(quantity -> quantity.compareTo(BigDecimal.ZERO) > 0);
     }
 }

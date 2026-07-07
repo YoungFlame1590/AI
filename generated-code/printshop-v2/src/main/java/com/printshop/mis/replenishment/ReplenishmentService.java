@@ -117,12 +117,19 @@ public class ReplenishmentService {
         result.put("itemName", item.itemName);
         result.put("quantity", item.quantity);
         result.put("staticSafetyStock", item.safetyStock);
+        result.put("lowStock", isLowStock(item));
         result.put("dynamicSafetyStock", dynamicSafetyStock);
         result.put("recommendedQuantity", recommended);
         result.put("supplierName", supplier.supplierName);
         result.put("estimatedCost", costFor(supplier, recommended));
         result.put("reason", reason(item, supplier, dynamicSafetyStock, recommended));
         return result;
+    }
+
+    private boolean isLowStock(InventoryItem item) {
+        return item.quantity != null
+                && item.safetyStock != null
+                && item.quantity.compareTo(item.safetyStock) <= 0;
     }
 
     private Map<String, Object> forecastFor(InventoryItem item) {

@@ -2,7 +2,8 @@
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [int]$Orders = 120,
     [switch]$Clear,
-    [switch]$TopUpInventory = $true,
+    [Alias("TopUpInventory")]
+    [switch]$AdjustInventoryToDemoLevels = $true,
     [switch]$IncludeFinance = $true
 )
 
@@ -22,6 +23,12 @@ $storeProfiles = @(
     @{ Key = "B"; StoreName = "市中心店"; Customer = "customer_b"; Clerk = "clerk_b"; Manager = "manager_b" },
     @{ Key = "C"; StoreName = "西区店"; Customer = "customer_c"; Clerk = "clerk_c"; Manager = "manager_c" }
 )
+$demoInventoryLevels = @{
+    "PAPER-A4-80G" = [decimal]4000
+    "PAPER-COATED-300G" = [decimal]150
+    "INK-COLOR" = [decimal]120
+    "BINDING-CONSUMABLE" = [decimal]60
+}
 
 function AuthHeader([string]$Username) {
     $pair = "$Username`:demo123"
@@ -179,6 +186,57 @@ function New-OrderPayload([int]$Index) {
     }
 }
 
+function Add-Requirement($Requirements, [string]$Sku, [decimal]$Quantity) {
+    if (-not $Requirements.ContainsKey($Sku)) {
+        $Requirements[$Sku] = [decimal]0
+    }
+    $Requirements[$Sku] = [decimal]$Requirements[$Sku] + $Quantity
+}
+
+function Get-ProductionMaterialRequirements([int]$OrderCount) {
+    $requirements = @{}
+    for ($i = 0; $i -lt $OrderCount; $i++) {
+        $targetStage = $stages[$i % $stages.Count]
+        if (@("PRODUCTION_DONE", "DELIVERING", "DONE") -notcontains $targetStage) {
+            continue
+        }
+        $payload = New-OrderPayload $i
+        $pages = [Math]::Max(1, [int]$payload.pageCount)
+        $copies = [Math]::Max(1, [int]$payload.copies)
+        $paperSku = if (@("名片快印", "海报写真", "写真展板") -contains $payload.productType) {
+            "PAPER-COATED-300G"
+        } else {
+            "PAPER-A4-80G"
+        }
+        Add-Requirement $requirements $paperSku ([decimal]($pages * $copies))
+        if ($payload.colorMode -ne "黑白") {
+            Add-Requirement $requirements "INK-COLOR" ([decimal]$copies)
+        }
+        if (@("论文胶装", "培训手册") -contains $payload.productType -or $payload.colorMode -eq "装订加覆膜") {
+            Add-Requirement $requirements "BINDING-CONSUMABLE" ([decimal]$copies)
+        }
+    }
+    return $requirements
+}
+
+function Set-DemoInventoryLevels($AdditionalRequired = @{}) {
+    $items = Invoke-Api "GET" "/api/inventory-items" "admin"
+    foreach ($item in $items) {
+        if (-not $demoInventoryLevels.ContainsKey($item.sku)) {
+            continue
+        }
+        $target = [decimal]$demoInventoryLevels[$item.sku]
+        if ($AdditionalRequired.ContainsKey($item.sku)) {
+            $target += [decimal]$AdditionalRequired[$item.sku]
+        }
+        $current = [decimal]$item.quantity
+        $delta = $target - $current
+        if ([Math]::Abs([double]$delta) -gt 0.0001) {
+            Invoke-Api "POST" "/api/inventory-items/$($item.id)/adjust" "admin" @{ delta = $delta } | Out-Null
+        }
+    }
+}
+
 Write-Host "[seed] Checking service: $BaseUrl"
 Invoke-Api "GET" "/stats" "admin" | Out-Null
 
@@ -187,12 +245,9 @@ if ($Clear) {
     Invoke-Api "DELETE" "/api/admin/business-data" "admin" | Out-Null
 }
 
-if ($TopUpInventory) {
-    Write-Host "[seed] Topping up inventory"
-    $items = Invoke-Api "GET" "/api/inventory-items" "admin"
-    foreach ($item in $items) {
-        Invoke-Api "POST" "/api/inventory-items/$($item.id)/adjust" "admin" @{ delta = 1000000 } | Out-Null
-    }
+if ($AdjustInventoryToDemoLevels) {
+    Write-Host "[seed] Setting inventory to demo levels"
+    Set-DemoInventoryLevels (Get-ProductionMaterialRequirements $Orders)
 }
 
 $summary = [ordered]@{}
@@ -220,6 +275,11 @@ for ($i = 0; $i -lt $Orders; $i++) {
     if (($i + 1) % 10 -eq 0 -or ($i + 1) -eq $Orders) {
         Write-Host ("[seed] {0}/{1} orders created" -f ($i + 1), $Orders)
     }
+}
+
+if ($AdjustInventoryToDemoLevels) {
+    Write-Host "[seed] Restoring final demo inventory levels"
+    Set-DemoInventoryLevels
 }
 
 $reports = Invoke-Api "GET" "/api/reports" "admin"
