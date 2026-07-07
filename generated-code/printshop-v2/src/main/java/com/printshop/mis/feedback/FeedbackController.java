@@ -55,4 +55,9 @@ public class FeedbackController {
     public ApiResponse<?> callbackReminders(Principal principal) {
         return api.ok(feedbackService.callbackReminders(principal.getName()));
     }
+
+    @PostMapping("/api/customer-callback-reminders/{customerId}/mark-contacted")
+    public ApiResponse<?> markCallbackContacted(Principal principal, @PathVariable Long customerId, @RequestBody(required = false) Map<String, Object> request) {
+        return api.ok(feedbackService.markCallbackContacted(principal.getName(), customerId, request == null ? Map.of() : request));
+    }
 }

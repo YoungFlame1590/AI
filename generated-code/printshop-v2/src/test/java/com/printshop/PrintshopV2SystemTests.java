@@ -1227,6 +1227,38 @@ class PrintshopV2SystemTests {
     }
 
     @Test
+    void shouldLetManagerMarkCallbackReminderContacted() throws Exception {
+        MvcResult reminders = mockMvc.perform(get("/api/customer-callback-reminders")
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andReturn();
+        List<Map<String, Object>> rows = JsonPath.read(reminders.getResponse().getContentAsString(), "$.data");
+        Integer customerId = Integer.valueOf(String.valueOf(rows.get(0).get("customerId")));
+
+        mockMvc.perform(post("/api/customer-callback-reminders/{customerId}/mark-contacted", customerId)
+                        .with(httpBasic("clerk", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\":\"店员不能标记\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/customer-callback-reminders/{customerId}/mark-contacted", customerId)
+                        .with(httpBasic("manager", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\":\"已电话回访，客户确认暂无新需求\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.contact.customerId").value(customerId))
+                .andExpect(jsonPath("$.data.contact.note").value("已电话回访，客户确认暂无新需求"));
+
+        MvcResult refreshed = mockMvc.perform(get("/api/customer-callback-reminders")
+                        .with(httpBasic("manager", "demo123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<Map<String, Object>> refreshedRows = JsonPath.read(refreshed.getResponse().getContentAsString(), "$.data");
+        assertFalse(refreshedRows.stream().anyMatch(row -> customerId.equals(Integer.valueOf(String.valueOf(row.get("customerId"))))));
+    }
+
+    @Test
     void shouldAllowAdminToRunOneClickCr09DemoTest() throws Exception {
         mockMvc.perform(post("/api/admin/demo-test")
                         .with(httpBasic("customer", "demo123"))

@@ -10,6 +10,7 @@ import static com.printshop.mis.shared.MisSupport.text;
 import com.printshop.common.exception.BusinessException;
 import com.printshop.mis.audit.AuditTrailService;
 import com.printshop.mis.domain.ComplaintTicket;
+import com.printshop.mis.domain.CustomerCallbackContact;
 import com.printshop.mis.domain.PrintOrder;
 import com.printshop.mis.domain.ServiceReview;
 import com.printshop.mis.domain.ServiceReviewInvitation;
@@ -17,6 +18,7 @@ import com.printshop.mis.domain.UserAccount;
 import com.printshop.mis.identity.IdentityService;
 import com.printshop.mis.order.OrderService;
 import com.printshop.mis.repository.ComplaintTicketRepository;
+import com.printshop.mis.repository.CustomerCallbackContactRepository;
 import com.printshop.mis.repository.PrintOrderRepository;
 import com.printshop.mis.repository.ServiceReviewInvitationRepository;
 import com.printshop.mis.repository.ServiceReviewRepository;
@@ -41,6 +43,7 @@ public class FeedbackService {
     private final ServiceReviewInvitationRepository invitations;
     private final ServiceReviewRepository reviews;
     private final ComplaintTicketRepository complaints;
+    private final CustomerCallbackContactRepository callbackContacts;
     private final AuditTrailService audit;
 
     public FeedbackService(
@@ -51,6 +54,7 @@ public class FeedbackService {
             ServiceReviewInvitationRepository invitations,
             ServiceReviewRepository reviews,
             ComplaintTicketRepository complaints,
+            CustomerCallbackContactRepository callbackContacts,
             AuditTrailService audit
     ) {
         this.identityService = identityService;
@@ -60,6 +64,7 @@ public class FeedbackService {
         this.invitations = invitations;
         this.reviews = reviews;
         this.complaints = complaints;
+        this.callbackContacts = callbackContacts;
         this.audit = audit;
     }
 
@@ -190,7 +195,35 @@ public class FeedbackService {
                 .filter(account -> user.storeId == null || account.storeId == null || user.storeId.equals(account.storeId) || List.of("OPS", "ADMIN").contains(user.role))
                 .map(account -> callbackFor(account, cutoff))
                 .filter(item -> Boolean.TRUE.equals(item.get("due")))
+                .filter(item -> !callbackContacts.existsByCustomerIdAndStoreIdAndContactedAtAfter(
+                        Long.valueOf(String.valueOf(item.get("customerId"))),
+                        item.get("storeId") == null ? null : Long.valueOf(String.valueOf(item.get("storeId"))),
+                        cutoff))
                 .toList();
+    }
+
+    public Map<String, Object> markCallbackContacted(String username, Long customerId, Map<String, Object> payload) {
+        UserAccount user = requireCallbackManager(username);
+        UserAccount customer = users.findById(customerId).orElseThrow(() -> notFound("客户", customerId));
+        if (!"CUSTOMER".equals(customer.role)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "只能标记客户回访。");
+        }
+        if (!"ADMIN".equals(user.role) && (user.storeId == null || customer.storeId == null || !user.storeId.equals(customer.storeId))) {
+            throw notFound("客户", customerId);
+        }
+        CustomerCallbackContact contact = new CustomerCallbackContact();
+        contact.customerId = customer.id;
+        contact.customerName = customer.displayName;
+        contact.storeId = customer.storeId;
+        contact.contactedBy = user.displayName;
+        contact.contactedAt = now();
+        contact.note = text(asString(payload.get("note")), "已完成电话/微信回访。");
+        CustomerCallbackContact saved = callbackContacts.save(contact);
+        audit.record(username, "FBK", "MARK_CALLBACK_CONTACTED", "CUSTOMER", customer.id, customer.displayName);
+        return Map.of(
+                "message", "已标记客户回访，30天内不再提醒。",
+                "contact", saved
+        );
     }
 
     private void createComplaint(ServiceReview review) {
@@ -219,6 +252,7 @@ public class FeedbackService {
                 .orElse(null);
         boolean due = lastOrderAt == null || lastOrderAt.isBefore(cutoff);
         Map<String, Object> reminder = new LinkedHashMap<>();
+        reminder.put("id", account.id);
         reminder.put("customerId", account.id);
         reminder.put("customerName", account.displayName);
         reminder.put("storeId", account.storeId);
@@ -240,6 +274,14 @@ public class FeedbackService {
         UserAccount user = identityService.requireUser(username);
         if (!List.of("MANAGER", "ADMIN").contains(user.role)) {
             throw forbidden("只有门店店长或系统管理员可以处理客诉。");
+        }
+        return user;
+    }
+
+    private UserAccount requireCallbackManager(String username) {
+        UserAccount user = identityService.requireUser(username);
+        if (!List.of("MANAGER", "ADMIN").contains(user.role)) {
+            throw forbidden("只有门店店长或系统管理员可以标记客户回访。");
         }
         return user;
     }

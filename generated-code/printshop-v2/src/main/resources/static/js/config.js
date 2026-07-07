@@ -75,6 +75,7 @@ export const actionRoles = {
   submitServiceReview: ["CUSTOMER", "ADMIN"],
   replyComplaint: ["MANAGER", "ADMIN"],
   closeComplaint: ["MANAGER", "ADMIN"],
+  markCallbackDone: ["MANAGER", "ADMIN"],
   fullFlow: ["ADMIN"],
 };
 
@@ -474,6 +475,7 @@ export const modules = {
       ["reason", "提醒原因", "textarea"],
     ],
     columns: ["customerName", "storeId", "lastOrderAt", "reason"],
+    actions: [["标记已回访", "POST", (id) => `/api/customer-callback-reminders/${id}/mark-contacted`, { note: "已完成客户回访。" }, "markCallbackDone"]],
   },
   deliveryQuotes: {
     title: "配送报价",
@@ -515,7 +517,7 @@ export const dashboardOrderColumns = ["orderNo", "customerName", "productType", 
 export const roleModules = {
   CUSTOMER: ["dashboard", "designTemplates", "designProjects", "orders", "serviceReviewInvitations", "serviceReviews"],
   CLERK: ["dashboard", "designTemplates", "designProjects", "orders", "quotations", "jobTickets", "inventoryItems", "serviceReviews"],
-  MANAGER: ["dashboard", "orderChangeRequests", "complaintTickets", "callbackReminders", "quotations", "productionTasks", "inventoryItems", "replenishmentRecommendations", "replenishmentForecast", "purchaseSuggestions", "storeQualityRanking", "reports"],
+  MANAGER: ["dashboard", "orders", "orderChangeRequests", "complaintTickets", "callbackReminders", "quotations", "productionTasks", "inventoryItems", "replenishmentRecommendations", "replenishmentForecast", "purchaseSuggestions", "storeQualityRanking", "reports"],
   OPS: ["dashboard", "designTemplates", "productionTasks", "inventoryItems", "replenishmentRecommendations", "replenishmentForecast", "purchaseSuggestions", "deliveryTasks", "deliveryQuotes", "storeQualityRanking", "reports"],
   FINANCE: ["dashboard", "invoices", "payments", "reports"],
   COURIER: ["dashboard", "deliveryTasks"],

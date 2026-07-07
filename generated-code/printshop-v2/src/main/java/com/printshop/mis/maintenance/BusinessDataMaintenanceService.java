@@ -7,6 +7,7 @@ import com.printshop.mis.identity.IdentityService;
 import com.printshop.mis.inventory.InventoryService;
 import com.printshop.mis.repository.AuditLogEntryRepository;
 import com.printshop.mis.repository.ComplaintTicketRepository;
+import com.printshop.mis.repository.CustomerCallbackContactRepository;
 import com.printshop.mis.repository.DeliveryQuoteRepository;
 import com.printshop.mis.repository.DeliveryTaskRepository;
 import com.printshop.mis.repository.DeliveryTrackingEventRepository;
@@ -47,6 +48,7 @@ public class BusinessDataMaintenanceService {
     private final ServiceReviewInvitationRepository serviceReviewInvitations;
     private final ServiceReviewRepository serviceReviews;
     private final ComplaintTicketRepository complaintTickets;
+    private final CustomerCallbackContactRepository callbackContacts;
     private final DeliveryQuoteRepository deliveryQuotes;
     private final DeliveryTrackingEventRepository deliveryTrackingEvents;
     private final JobTicketRepository jobTickets;
@@ -71,6 +73,7 @@ public class BusinessDataMaintenanceService {
             ServiceReviewInvitationRepository serviceReviewInvitations,
             ServiceReviewRepository serviceReviews,
             ComplaintTicketRepository complaintTickets,
+            CustomerCallbackContactRepository callbackContacts,
             DeliveryQuoteRepository deliveryQuotes,
             DeliveryTrackingEventRepository deliveryTrackingEvents,
             QuotationRepository quotations,
@@ -95,6 +98,7 @@ public class BusinessDataMaintenanceService {
         this.serviceReviewInvitations = serviceReviewInvitations;
         this.serviceReviews = serviceReviews;
         this.complaintTickets = complaintTickets;
+        this.callbackContacts = callbackContacts;
         this.deliveryQuotes = deliveryQuotes;
         this.deliveryTrackingEvents = deliveryTrackingEvents;
         this.quotations = quotations;
@@ -123,6 +127,7 @@ public class BusinessDataMaintenanceService {
         deleted.put("deliveryTrackingEvents", deliveryTrackingEvents.count());
         deleted.put("deliveryQuotes", deliveryQuotes.count());
         deleted.put("complaintTickets", complaintTickets.count());
+        deleted.put("callbackContacts", callbackContacts.count());
         deleted.put("serviceReviews", serviceReviews.count());
         deleted.put("serviceReviewInvitations", serviceReviewInvitations.count());
         deleted.put("purchaseSuggestions", purchaseSuggestions.count());
@@ -144,6 +149,7 @@ public class BusinessDataMaintenanceService {
         deliveryQuotes.deleteAllInBatch();
         deliveryTasks.deleteAllInBatch();
         complaintTickets.deleteAllInBatch();
+        callbackContacts.deleteAllInBatch();
         serviceReviews.deleteAllInBatch();
         serviceReviewInvitations.deleteAllInBatch();
         purchaseSuggestions.deleteAllInBatch();
