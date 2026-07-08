@@ -527,7 +527,7 @@ export const roleModules = {
   CUSTOMER: ["dashboard", "designTemplates", "designProjects", "orders", "serviceReviewInvitations", "serviceReviews"],
   CLERK: ["dashboard", "designTemplates", "designProjects", "orders", "quotations", "jobTickets", "inventoryItems", "serviceReviews"],
   MANAGER: ["dashboard", "orders", "orderChangeRequests", "complaintTickets", "callbackReminders", "quotations", "productionTasks", "inventoryItems", "replenishmentRecommendations", "replenishmentForecast", "purchaseSuggestions", "storeQualityRanking", "reports"],
-  OPS: ["dashboard", "designTemplates", "productionTasks", "inventoryItems", "replenishmentRecommendations", "replenishmentForecast", "purchaseSuggestions", "deliveryTasks", "deliveryQuotes", "storeQualityRanking", "reports"],
+  OPS: ["dashboard", "designTemplates", "orders", "productionTasks", "inventoryItems", "replenishmentRecommendations", "replenishmentForecast", "purchaseSuggestions", "deliveryTasks", "deliveryQuotes", "storeQualityRanking", "reports"],
   FINANCE: ["dashboard", "invoices", "payments", "reports"],
   COURIER: ["dashboard", "deliveryTasks"],
   ADMIN: Object.keys(modules),

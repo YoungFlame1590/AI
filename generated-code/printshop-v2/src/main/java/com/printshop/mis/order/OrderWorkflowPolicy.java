@@ -59,6 +59,11 @@ public class OrderWorkflowPolicy {
                     && !frozen;
             case "CREATE_DELIVERY" -> Set.of("OPS", "ADMIN").contains(role)
                     && OrderStatusPolicy.PRODUCTION_DONE.equals(order.status)
+                    && !requiresThirdPartyQuote(order)
+                    && !frozen;
+            case "CREATE_DELIVERY_QUOTE" -> Set.of("OPS", "ADMIN").contains(role)
+                    && OrderStatusPolicy.PRODUCTION_DONE.equals(order.status)
+                    && requiresThirdPartyQuote(order)
                     && !frozen;
             case "ACCEPT_DELIVERY", "SIGN_DELIVERY" -> "COURIER".equals(role)
                     && OrderStatusPolicy.DELIVERING.equals(order.status);
@@ -103,6 +108,10 @@ public class OrderWorkflowPolicy {
                 OrderStatusPolicy.DELIVERING,
                 OrderStatusPolicy.DONE
         ).contains(order.status) && !"PAID".equals(order.paymentStatus) && !"REFUNDED".equals(order.paymentStatus);
+    }
+
+    public boolean requiresThirdPartyQuote(PrintOrder order) {
+        return Set.of("同城配送", "外协配送").contains(order.deliveryMode);
     }
 
     public boolean hasConfirmedQuotation(Long orderId) {

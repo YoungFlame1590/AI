@@ -1,6 +1,8 @@
 package com.printshop.mis.maintenance;
 
 import com.printshop.common.exception.BusinessException;
+import com.printshop.mis.delivery.DeliveryService;
+import com.printshop.mis.domain.DeliveryQuote;
 import com.printshop.mis.domain.InventoryConsumption;
 import com.printshop.mis.domain.InventoryItem;
 import com.printshop.mis.domain.PrintOrder;
@@ -56,6 +58,7 @@ public class DemoTestDataService {
     private final InventoryConsumptionRepository consumptions;
     private final OrderService orderService;
     private final OrderWorkflowService workflowService;
+    private final DeliveryService deliveryService;
     private final FeedbackService feedbackService;
     private final ReplenishmentService replenishmentService;
     private final ReportingService reportingService;
@@ -69,6 +72,7 @@ public class DemoTestDataService {
             InventoryConsumptionRepository consumptions,
             OrderService orderService,
             OrderWorkflowService workflowService,
+            DeliveryService deliveryService,
             FeedbackService feedbackService,
             ReplenishmentService replenishmentService,
             ReportingService reportingService,
@@ -81,6 +85,7 @@ public class DemoTestDataService {
         this.consumptions = consumptions;
         this.orderService = orderService;
         this.workflowService = workflowService;
+        this.deliveryService = deliveryService;
         this.feedbackService = feedbackService;
         this.replenishmentService = replenishmentService;
         this.reportingService = reportingService;
@@ -160,12 +165,29 @@ public class DemoTestDataService {
         if ("PRODUCTION_DONE".equals(stage)) {
             return;
         }
-        workflowService.executeAction("ops", orderId, "CREATE_DELIVERY", Map.of());
+        createDeliveryForDemoOrder(orderId, profile);
         if ("DELIVERING".equals(stage)) {
             return;
         }
         workflowService.executeAction("courier", orderId, "ACCEPT_DELIVERY", Map.of());
         workflowService.executeAction("courier", orderId, "SIGN_DELIVERY", Map.of("signedBy", profile.storeName() + "测试客户"));
+    }
+
+    private void createDeliveryForDemoOrder(Long orderId, StoreProfile profile) {
+        PrintOrder order = orders.findById(orderId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "演示订单不存在：" + orderId));
+        if (Set.of("同城配送", "外协配送").contains(order.deliveryMode)) {
+            DeliveryQuote quote = deliveryService.createDeliveryQuote("ops", Map.of(
+                    "orderId", orderId,
+                    "channelCode", "外协配送".equals(order.deliveryMode) ? "EXPRESS" : "IMMEDIATE",
+                    "pickupAddress", order.storeName == null ? profile.storeName() : order.storeName,
+                    "deliveryAddress", "广州市" + profile.storeName() + "演示客户地址",
+                    "packageWeightKg", "1.5"
+            ));
+            deliveryService.confirmDeliveryQuote("ops", quote.id);
+            return;
+        }
+        workflowService.executeAction("ops", orderId, "CREATE_DELIVERY", Map.of());
     }
 
     private PrintOrder orderPayload(int index) {

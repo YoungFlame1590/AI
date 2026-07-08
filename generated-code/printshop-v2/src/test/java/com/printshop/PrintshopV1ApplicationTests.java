@@ -518,7 +518,24 @@ class PrintshopV1ApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PRODUCTION_DONE"));
 
-        MvcResult deliveryResult = mockMvc.perform(post("/api/orders/{id}/workflow/delivery-task", orderId)
+        MvcResult quoteResult = mockMvc.perform(post("/api/delivery-quotes")
+                        .with(httpBasic("ops", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderId": %d,
+                                  "channelCode": "IMMEDIATE",
+                                  "pickupAddress": "大学城店",
+                                  "deliveryAddress": "广州市大学城客户公司前台",
+                                  "packageWeightKg": 1.5
+                                }
+                                """.formatted(orderId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId").value(orderId))
+                .andReturn();
+        Integer quoteId = JsonPath.read(quoteResult.getResponse().getContentAsString(), "$.data.id");
+
+        MvcResult deliveryResult = mockMvc.perform(post("/api/delivery-quotes/{id}/confirm", quoteId)
                         .with(httpBasic("ops", "demo123")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.orderId").value(orderId))

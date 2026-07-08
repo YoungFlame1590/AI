@@ -230,9 +230,7 @@ export function renderAggregateDetail(handlers) {
   `;
   el.recordActions.innerHTML = "";
   for (const action of aggregate.nextTasks || []) {
-    const handler = action.action === "UPLOAD_FILE"
-      ? handlers.uploadOrderFile
-      : () => handlers.runWorkflowAction(action.action, order.id);
+    const handler = aggregateActionHandler(action, order, handlers);
     addAction(action.label || action.action, handler, "primary");
   }
   if (state.selectedTask?.type === "CHANGE_REQUEST") {
@@ -243,6 +241,19 @@ export function renderAggregateDetail(handlers) {
     addAction("提交评价", () => handlers.runRecordAction("POST", state.selectedTask.path, "__serviceReviewFromTask"), "primary");
   }
   renderTimeline(aggregate.audits || []);
+}
+
+function aggregateActionHandler(action, order, handlers) {
+  if (action.action === "UPLOAD_FILE") {
+    return handlers.uploadOrderFile;
+  }
+  if (action.action === "CREATE_DELIVERY_QUOTE") {
+    return () => {
+      state.selected = order;
+      return handlers.runRecordAction("POST", "/api/delivery-quotes", "__deliveryQuoteFromOrder");
+    };
+  }
+  return () => handlers.runWorkflowAction(action.action, order.id);
 }
 
 export function promptActionForm({ title, fields, initial = {}, submitLabel = "提交" }) {

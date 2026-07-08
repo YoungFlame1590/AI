@@ -1243,6 +1243,40 @@ class PrintshopV2SystemTests {
     }
 
     @Test
+    void shouldExposeThirdPartyQuoteForOpsAndBlockDirectDeliveryForThirdPartyMode() throws Exception {
+        MvcResult order = createOrder("customer", "宣传单页", "彩色", 2, 50, "同城配送", "普通");
+        Integer orderId = JsonPath.read(order.getResponse().getContentAsString(), "$.data.id");
+        progressToProductionDone(orderId);
+
+        mockMvc.perform(get("/api/orders/{orderId}/aggregate", orderId)
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nextTasks[0].action").value("CREATE_DELIVERY_QUOTE"))
+                .andExpect(jsonPath("$.data.nextTasks[0].label").value("第三方配送报价"));
+
+        mockMvc.perform(post("/api/orders/{id}/workflow/delivery-task", orderId)
+                        .with(httpBasic("ops", "demo123")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("第三方配送报价")));
+
+        mockMvc.perform(post("/api/delivery-quotes")
+                        .with(httpBasic("ops", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderId": %d,
+                                  "channelCode": "IMMEDIATE",
+                                  "pickupAddress": "大学城店",
+                                  "deliveryAddress": "广州市大学城客户公司前台",
+                                  "packageWeightKg": 1.5
+                                }
+                                """.formatted(orderId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.deliveryAddress").value("广州市大学城客户公司前台"))
+                .andExpect(jsonPath("$.data.status").value("QUOTED"));
+    }
+
+    @Test
     void shouldLetManagerMarkCallbackReminderContacted() throws Exception {
         MvcResult reminders = mockMvc.perform(get("/api/customer-callback-reminders")
                         .with(httpBasic("manager", "demo123")))
@@ -1476,7 +1510,22 @@ class PrintshopV2SystemTests {
 
     private void progressToDelivery(Integer orderId) throws Exception {
         progressToProductionDone(orderId);
-        mockMvc.perform(post("/api/orders/{id}/workflow/delivery-task", orderId)
+        MvcResult quote = mockMvc.perform(post("/api/delivery-quotes")
+                        .with(httpBasic("ops", "demo123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderId": %d,
+                                  "channelCode": "IMMEDIATE",
+                                  "pickupAddress": "大学城店",
+                                  "deliveryAddress": "广州市大学城客户公司前台",
+                                  "packageWeightKg": 1.5
+                                }
+                                """.formatted(orderId)))
+                .andExpect(status().isOk())
+                .andReturn();
+        Integer quoteId = JsonPath.read(quote.getResponse().getContentAsString(), "$.data.id");
+        mockMvc.perform(post("/api/delivery-quotes/{id}/confirm", quoteId)
                         .with(httpBasic("ops", "demo123")))
                 .andExpect(status().isOk());
     }

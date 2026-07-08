@@ -3,6 +3,7 @@ package com.printshop.mis.order;
 import static com.printshop.mis.shared.MisSupport.text;
 
 import com.printshop.common.exception.BusinessException;
+import com.printshop.mis.domain.DeliveryQuote;
 import com.printshop.mis.delivery.DeliveryService;
 import com.printshop.mis.domain.DeliveryTask;
 import com.printshop.mis.domain.InvoiceRecord;
@@ -139,8 +140,11 @@ public class OrderWorkflowService {
         if (workflowPolicy.available(username, order, "COMPLETE_PRODUCTION")) {
             addAction(actions, "COMPLETE_PRODUCTION", "完工质检", "完成生产并通过质检");
         }
+        if (workflowPolicy.available(username, order, "CREATE_DELIVERY_QUOTE")) {
+            addAction(actions, "CREATE_DELIVERY_QUOTE", "第三方配送报价", "填写地址并选择即时/快递配送报价");
+        }
         if (workflowPolicy.available(username, order, "CREATE_DELIVERY")) {
-            addAction(actions, "CREATE_DELIVERY", "生成配送", "创建配送/外协任务");
+            addAction(actions, "CREATE_DELIVERY", "生成自营配送", "创建自提/跨店配送任务");
         }
         if (workflowPolicy.available(username, order, "ACCEPT_DELIVERY")) {
             addAction(actions, "ACCEPT_DELIVERY", "接受配送", "承接待分配配送任务");
@@ -220,6 +224,9 @@ public class OrderWorkflowService {
         PrintOrder order = orderService.requireVisibleOrder(username, orderId);
         statusPolicy.requireStatus(order, Set.of(OrderStatusPolicy.PRODUCTION_DONE), "生成配送", "完成生产质检");
         changeGuard.requireNoPendingChange(order, "生成配送");
+        if (workflowPolicy.requiresThirdPartyQuote(order)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "该订单需要先进行第三方配送报价，请使用“第三方配送报价”。");
+        }
         DeliveryTask request = new DeliveryTask();
         request.orderId = order.id;
         request.mode = order.deliveryMode;
@@ -288,11 +295,28 @@ public class OrderWorkflowService {
         result.put("productionTask", quickProductionTask(username, orderId));
         ProductionTask production = (ProductionTask) result.get("productionTask");
         result.put("productionDone", productionTaskService.completeProductionTask(username, production.id));
-        result.put("deliveryTask", quickDeliveryTask(username, orderId));
+        createDeliveryForFullFlow(username, orderId, result);
         result.put("payment", quickPayment(username, orderId));
         result.put("invoice", quickInvoice(username, orderId));
         result.put("order", orderService.requireVisibleOrder(username, orderId));
         return result;
+    }
+
+    private void createDeliveryForFullFlow(String username, Long orderId, Map<String, Object> result) {
+        PrintOrder current = orderService.requireVisibleOrder(username, orderId);
+        if (workflowPolicy.requiresThirdPartyQuote(current)) {
+            DeliveryQuote quote = deliveryService.createDeliveryQuote(username, Map.of(
+                    "orderId", orderId,
+                    "channelCode", "外协配送".equals(current.deliveryMode) ? "EXPRESS" : "IMMEDIATE",
+                    "pickupAddress", text(current.storeName, "门店"),
+                    "deliveryAddress", "广州市" + text(current.storeName, "门店") + "客户地址",
+                    "packageWeightKg", "1.5"
+            ));
+            result.put("deliveryQuote", quote);
+            result.put("deliveryTask", deliveryService.confirmDeliveryQuote(username, quote.id));
+            return;
+        }
+        result.put("deliveryTask", quickDeliveryTask(username, orderId));
     }
 
     private Map<String, Object> workflowResponse(String username, Long orderId, String action, Object result) {

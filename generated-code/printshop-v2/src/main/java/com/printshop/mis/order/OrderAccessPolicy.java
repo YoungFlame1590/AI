@@ -93,6 +93,7 @@ public class OrderAccessPolicy {
                 || (carrierUsername.isBlank() && carrier.equals(user.username))
                 || carrier.isBlank()
                 || "待分配".equals(carrier)
-                || "PENDING".equals(task.status);
+                || "PENDING".equals(task.status)
+                || "ASSIGNED".equals(task.status);
     }
 }
